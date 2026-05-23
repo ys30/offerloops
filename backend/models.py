@@ -118,3 +118,20 @@ class AnalyzeResult(BaseModel):
     fit_reasons: list[str]
     gap_reasons: list[str]
     extracted_requirements: list[str]
+
+
+class ApplicationPackRequest(BaseModel):
+    job_id: str
+    resume_text: str
+    provider: str = "nvidia"
+    model: Optional[str] = None
+    api_key: Optional[str] = None
+
+
+class ApplicationPackResult(BaseModel):
+    job_id: str
+    job_title: str
+    company: str
+    tailored_resume: str    # markdown
+    cover_letter: str       # plain text
+    provider_used: str

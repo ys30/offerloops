@@ -64,6 +64,21 @@ export async function ingestCompany(
   return res.json();
 }
 
+export async function generateApplicationPack(
+  jobId: string,
+  resumeText: string,
+  provider: string = "nvidia",
+  apiKey?: string
+): Promise<Record<string, unknown>> {
+  const res = await fetch(`${BASE}/ai/application-pack`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ job_id: jobId, resume_text: resumeText, provider, api_key: apiKey }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 export async function analyzeJob(
   jobId: string,
   resumeText: string,

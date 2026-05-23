@@ -1,5 +1,6 @@
 """FastAPI application — open API for job search platform."""
 
+import asyncio
 import json
 import uuid
 from datetime import datetime
@@ -16,6 +17,8 @@ from pathlib import Path
 from .database import JobRow, SessionLocal, get_db, init_db
 from .models import (
     AnalyzeRequest,
+    ApplicationPackRequest,
+    ApplicationPackResult,
     Job,
     JobCreate,
     JobSource,
@@ -250,6 +253,54 @@ async def analyze_job(payload: AnalyzeRequest, db: Session = Depends(get_db)):
     db.commit()
 
     return result
+
+
+@app.post("/api/ai/application-pack", response_model=ApplicationPackResult, tags=["ai"])
+async def generate_application_pack(
+    payload: ApplicationPackRequest,
+    db: Session = Depends(get_db),
+):
+    """One-click: generate tailored resume + cover letter for a job."""
+    from .ai import tailor_resume, generate_cover_letter, _pick_provider
+
+    row = db.get(JobRow, payload.job_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    try:
+        provider_used, _ = _pick_provider(payload.provider, payload.api_key)
+        tailored, cover = await asyncio.gather(
+            tailor_resume(
+                job_title=row.title,
+                job_description=row.description or "",
+                resume_text=payload.resume_text,
+                provider=payload.provider,
+                model=payload.model,
+                api_key=payload.api_key,
+            ),
+            generate_cover_letter(
+                job_title=row.title,
+                company=row.company,
+                job_description=row.description or "",
+                resume_text=payload.resume_text,
+                provider=payload.provider,
+                model=payload.model,
+                api_key=payload.api_key,
+            ),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Generation failed: {e}")
+
+    return ApplicationPackResult(
+        job_id=payload.job_id,
+        job_title=row.title,
+        company=row.company,
+        tailored_resume=tailored,
+        cover_letter=cover,
+        provider_used=provider_used,
+    )
 
 
 @app.post("/api/ai/search", tags=["ai"])

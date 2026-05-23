@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Job } from "../types";
-import { analyzeJob } from "../api";
+import { analyzeJob, generateApplicationPack } from "../api";
+import ApplicationPack from "./ApplicationPack";
 
 interface Props {
   job: Job;
@@ -20,7 +21,9 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
   const [provider, setProvider] = useState("nvidia");
   const [apiKey, setApiKey] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [pack, setPack] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
 
   async function handleAnalyze() {
@@ -168,14 +171,42 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
             style={{ ...inputStyle, marginTop: 8 }}
           />
           {error && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 6 }}>{error}</div>}
-          <button
-            onClick={handleAnalyze}
-            disabled={analyzing || !resume.trim()}
-            style={btnStyle("#2563eb", "#fff")}
-          >
-            {analyzing ? "Analyzing…" : `Score with ${PROVIDERS.find(p => p.id === provider)?.label}`}
-          </button>
+          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            <button
+              onClick={handleAnalyze}
+              disabled={analyzing || generating || !resume.trim()}
+              style={btnStyle("#2563eb", "#fff")}
+            >
+              {analyzing ? "Scoring…" : `Score fit`}
+            </button>
+            <button
+              onClick={async () => {
+                if (!resume.trim()) return;
+                setGenerating(true);
+                setError("");
+                try {
+                  const r = await generateApplicationPack(job.id, resume, provider, apiKey || undefined);
+                  setPack(r);
+                } catch (e: unknown) {
+                  setError(e instanceof Error ? e.message : String(e));
+                } finally {
+                  setGenerating(false);
+                }
+              }}
+              disabled={analyzing || generating || !resume.trim()}
+              style={btnStyle("#059669", "#fff")}
+            >
+              {generating ? "Generating…" : "⚡ One-click Resume + Cover Letter"}
+            </button>
+          </div>
         </section>
+
+        {pack && (
+          <ApplicationPack
+            result={pack as Parameters<typeof ApplicationPack>[0]["result"]}
+            onClose={() => setPack(null)}
+          />
+        )}
       </div>
     </div>
   );

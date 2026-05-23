@@ -187,6 +187,67 @@ async def analyze_job_fit(
     )
 
 
+TAILOR_RESUME_SYSTEM = """You are an expert resume writer. Given a base resume and a job description,
+rewrite the resume to be tailored for that specific role. Rules:
+- Keep all factual information (companies, dates, degrees, names) exactly as-is
+- Reorder bullet points so the most relevant ones come first
+- Rephrase bullets to mirror the job description's language where truthful
+- Highlight skills and experience that match the requirements
+- Remove or de-emphasize irrelevant content
+- Output clean, professional markdown with sections: Summary, Experience, Skills, Education
+- Do NOT invent or exaggerate anything"""
+
+COVER_LETTER_SYSTEM = """You are an expert career coach and cover letter writer.
+Given a resume and a job description, write a compelling, personalized cover letter.
+Rules:
+- 3-4 paragraphs, professional but warm tone
+- Opening: why THIS role at THIS company excites the candidate
+- Middle: 2-3 specific achievements from the resume that directly match the job
+- Closing: call to action, enthusiasm
+- No generic phrases like 'I am writing to apply for...'
+- Output plain text only, no markdown"""
+
+
+async def tailor_resume(
+    job_title: str,
+    job_description: str,
+    resume_text: str,
+    provider: str = "nvidia",
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+) -> str:
+    resolved_provider, resolved_key = _pick_provider(provider, api_key)
+    resolved_model = model or PROVIDERS[resolved_provider]["default_model"]
+    user_msg = f"Job Title: {job_title}\n\nJob Description:\n{job_description[:4000]}\n\nBase Resume:\n{resume_text[:3000]}\n\nWrite the tailored resume in markdown:"
+    return await _call_provider(resolved_provider, resolved_model, TAILOR_RESUME_SYSTEM, user_msg, resolved_key)
+
+
+async def generate_cover_letter(
+    job_title: str,
+    company: str,
+    job_description: str,
+    resume_text: str,
+    provider: str = "nvidia",
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+) -> str:
+    resolved_provider, resolved_key = _pick_provider(provider, api_key)
+    resolved_model = model or PROVIDERS[resolved_provider]["default_model"]
+    user_msg = f"Job Title: {job_title}\nCompany: {company}\n\nJob Description:\n{job_description[:3000]}\n\nResume:\n{resume_text[:2500]}\n\nWrite the cover letter:"
+    return await _call_provider(resolved_provider, resolved_model, COVER_LETTER_SYSTEM, user_msg, resolved_key)
+
+
+def _pick_provider(preferred: str, api_key: Optional[str]) -> tuple[str, str]:
+    """Return (provider, key) — use preferred if key available, else fall back."""
+    if api_key:
+        return preferred, api_key
+    for p in [preferred, "nvidia", "anthropic", "openai", "gemini"]:
+        key = os.environ.get(PROVIDERS[p]["env_key"], "")
+        if key:
+            return p, key
+    raise ValueError("No AI provider configured. Set at least one API key in .env.")
+
+
 async def parse_search_query(
     query: str,
     provider: str = "anthropic",
