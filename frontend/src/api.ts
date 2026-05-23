@@ -67,12 +67,13 @@ export async function ingestCompany(
 export async function analyzeJob(
   jobId: string,
   resumeText: string,
+  provider: string = "anthropic",
   apiKey?: string
 ): Promise<Record<string, unknown>> {
   const res = await fetch(`${BASE}/ai/analyze`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ job_id: jobId, resume_text: resumeText, api_key: apiKey }),
+    body: JSON.stringify({ job_id: jobId, resume_text: resumeText, provider, api_key: apiKey }),
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();

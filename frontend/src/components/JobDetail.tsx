@@ -8,8 +8,16 @@ interface Props {
   onDeleted: (id: string) => void;
 }
 
+const PROVIDERS = [
+  { id: "nvidia",    label: "NVIDIA NIM (Llama 3.3 70B)" },
+  { id: "anthropic", label: "Claude Opus 4.7" },
+  { id: "openai",    label: "GPT-4o" },
+  { id: "gemini",    label: "Gemini 1.5 Pro" },
+];
+
 export default function JobDetail({ job, onBack, onDeleted }: Props) {
   const [resume, setResume] = useState("");
+  const [provider, setProvider] = useState("nvidia");
   const [apiKey, setApiKey] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
@@ -20,7 +28,7 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
     setAnalyzing(true);
     setError("");
     try {
-      const r = await analyzeJob(job.id, resume, apiKey || undefined);
+      const r = await analyzeJob(job.id, resume, provider, apiKey || undefined);
       setResult(r);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -124,7 +132,27 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
         )}
 
         <section style={{ marginTop: 32, padding: 16, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
-          <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>Analyze with Claude Opus 4.7</h3>
+          <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>AI Job Fit Analysis</h3>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+            {PROVIDERS.map(p => (
+              <button
+                key={p.id}
+                onClick={() => setProvider(p.id)}
+                style={{
+                  padding: "5px 12px",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 5,
+                  cursor: "pointer",
+                  background: provider === p.id ? "#2563eb" : "#fff",
+                  color: provider === p.id ? "#fff" : "#374151",
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
           <textarea
             value={resume}
             onChange={e => setResume(e.target.value)}
@@ -136,7 +164,7 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
             type="password"
             value={apiKey}
             onChange={e => setApiKey(e.target.value)}
-            placeholder="Anthropic API key (optional if server key is set)"
+            placeholder={`${PROVIDERS.find(p => p.id === provider)?.label} API key (optional if set on server)`}
             style={{ ...inputStyle, marginTop: 8 }}
           />
           {error && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 6 }}>{error}</div>}
@@ -145,7 +173,7 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
             disabled={analyzing || !resume.trim()}
             style={btnStyle("#2563eb", "#fff")}
           >
-            {analyzing ? "Analyzing…" : "Score this job"}
+            {analyzing ? "Analyzing…" : `Score with ${PROVIDERS.find(p => p.id === provider)?.label}`}
           </button>
         </section>
       </div>

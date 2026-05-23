@@ -106,7 +106,9 @@ class JobSearchParams(BaseModel):
 class AnalyzeRequest(BaseModel):
     job_id: str
     resume_text: str
-    api_key: Optional[str] = None       # BYOK — Anthropic key from client
+    provider: str = "anthropic"         # anthropic | openai | nvidia | gemini
+    model: Optional[str] = None         # override default model for the provider
+    api_key: Optional[str] = None       # BYOK — provider key from client
 
 
 class AnalyzeResult(BaseModel):

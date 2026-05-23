@@ -212,9 +212,16 @@ async def trigger_bulk(db: Session = Depends(get_db)):
 # ── AI endpoints ─────────────────────────────────────────────────────
 
 
+@app.get("/api/ai/providers", tags=["ai"])
+def get_providers():
+    """List available AI providers and their configured status."""
+    from .ai import available_providers
+    return available_providers()
+
+
 @app.post("/api/ai/analyze", tags=["ai"])
 async def analyze_job(payload: AnalyzeRequest, db: Session = Depends(get_db)):
-    """Score a job against a resume using Claude Opus 4.7. Pass api_key for BYOK."""
+    """Score a job against a resume. Supports anthropic, openai, nvidia, gemini."""
     from .ai import analyze_job_fit
 
     row = db.get(JobRow, payload.job_id)
@@ -227,6 +234,8 @@ async def analyze_job(payload: AnalyzeRequest, db: Session = Depends(get_db)):
             job_title=row.title,
             job_description=row.description or "",
             resume_text=payload.resume_text,
+            provider=payload.provider,
+            model=payload.model,
             api_key=payload.api_key,
         )
     except ValueError as e:
@@ -234,7 +243,6 @@ async def analyze_job(payload: AnalyzeRequest, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI analysis failed: {e}")
 
-    # Persist score back to the job row
     row.ai_score = result.score
     row.ai_summary = result.summary
     row.ai_tags = json.dumps(result.extracted_requirements)
@@ -247,15 +255,16 @@ async def analyze_job(payload: AnalyzeRequest, db: Session = Depends(get_db)):
 @app.post("/api/ai/search", tags=["ai"])
 async def ai_search(
     query: str = Query(..., description="Natural language: 'remote EPA data scientist'"),
-    api_key: Optional[str] = Query(None, description="Anthropic API key (BYOK)"),
+    provider: str = Query("anthropic", description="AI provider: anthropic|openai|nvidia|gemini"),
+    api_key: Optional[str] = Query(None, description="Provider API key (BYOK)"),
     limit: int = Query(20, le=100),
     db: Session = Depends(get_db),
 ):
-    """Parse a natural language query with Claude, then search the job database."""
+    """Parse a natural language query with AI, then search the job database."""
     from .ai import parse_search_query
 
     try:
-        params = parse_search_query(query, api_key=api_key)
+        params = parse_search_query(query, provider=provider, api_key=api_key)
     except Exception:
         params = {"keyword": query}
 
