@@ -159,8 +159,8 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
           <textarea
             value={resume}
             onChange={e => setResume(e.target.value)}
-            placeholder="Paste your resume text here..."
-            rows={6}
+            placeholder="Paste your resume here — or leave blank to use your saved profile resume"
+            rows={5}
             style={textareaStyle}
           />
           <input
@@ -181,7 +181,6 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
             </button>
             <button
               onClick={async () => {
-                if (!resume.trim()) return;
                 setGenerating(true);
                 setError("");
                 try {
@@ -193,7 +192,7 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
                   setGenerating(false);
                 }
               }}
-              disabled={analyzing || generating || !resume.trim()}
+              disabled={analyzing || generating}
               style={btnStyle("#059669", "#fff")}
             >
               {generating ? "Generating…" : "⚡ One-click Resume + Cover Letter"}

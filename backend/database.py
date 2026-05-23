@@ -3,7 +3,7 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional  # noqa: F401
 
 from sqlalchemy import (
     Column, DateTime, Float, String, Text, Boolean, create_engine, event
@@ -59,6 +59,20 @@ class JobRow(Base):
     ai_summary = Column(Text)
     ai_score = Column(Float)
     ai_tags = Column(Text, default="[]")         # JSON list
+
+
+class ProfileRow(Base):
+    __tablename__ = "profiles"
+
+    id = Column(String, primary_key=True, default="default")
+    name = Column(String)
+    email = Column(String)
+    phone = Column(String)
+    location = Column(String)
+    linkedin_url = Column(String)
+    resume_text = Column(Text)          # raw text (source of truth for AI)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 def get_db():

@@ -188,14 +188,37 @@ async def analyze_job_fit(
 
 
 TAILOR_RESUME_SYSTEM = """You are an expert resume writer. Given a base resume and a job description,
-rewrite the resume to be tailored for that specific role. Rules:
+produce a tailored resume as a JSON object. Rules:
 - Keep all factual information (companies, dates, degrees, names) exactly as-is
 - Reorder bullet points so the most relevant ones come first
 - Rephrase bullets to mirror the job description's language where truthful
-- Highlight skills and experience that match the requirements
-- Remove or de-emphasize irrelevant content
-- Output clean, professional markdown with sections: Summary, Experience, Skills, Education
-- Do NOT invent or exaggerate anything"""
+- Do NOT invent or exaggerate anything
+- Output ONLY valid JSON, no markdown fences, matching this schema exactly:
+{
+  "name": "Full Name",
+  "email": "email@example.com",
+  "phone": "",
+  "location": "City, State",
+  "linkedin": "",
+  "summary": "2-3 sentence tailored professional summary",
+  "experience": [
+    {
+      "title": "Job Title",
+      "company": "Company Name",
+      "dates": "Jan 2020 – Present",
+      "bullets": ["achievement 1", "achievement 2"]
+    }
+  ],
+  "education": [
+    {
+      "degree": "M.S. Environmental Science",
+      "school": "University Name",
+      "year": "2020",
+      "notes": ""
+    }
+  ],
+  "skills": ["Python", "GIS", "SQL"]
+}"""
 
 COVER_LETTER_SYSTEM = """You are an expert career coach and cover letter writer.
 Given a resume and a job description, write a compelling, personalized cover letter.
@@ -215,11 +238,13 @@ async def tailor_resume(
     provider: str = "nvidia",
     model: Optional[str] = None,
     api_key: Optional[str] = None,
-) -> str:
+) -> dict:
+    """Return structured resume as a dict."""
     resolved_provider, resolved_key = _pick_provider(provider, api_key)
     resolved_model = model or PROVIDERS[resolved_provider]["default_model"]
-    user_msg = f"Job Title: {job_title}\n\nJob Description:\n{job_description[:4000]}\n\nBase Resume:\n{resume_text[:3000]}\n\nWrite the tailored resume in markdown:"
-    return await _call_provider(resolved_provider, resolved_model, TAILOR_RESUME_SYSTEM, user_msg, resolved_key)
+    user_msg = f"Job Title: {job_title}\n\nJob Description:\n{job_description[:4000]}\n\nBase Resume:\n{resume_text[:3000]}\n\nOutput the tailored resume JSON:"
+    raw = await _call_provider(resolved_provider, resolved_model, TAILOR_RESUME_SYSTEM, user_msg, resolved_key)
+    return json.loads(_strip_json(raw))
 
 
 async def generate_cover_letter(

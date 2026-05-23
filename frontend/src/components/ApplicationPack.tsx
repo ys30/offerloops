@@ -1,9 +1,19 @@
-import { useState } from "react";
+interface ResumeData {
+  name?: string;
+  email?: string;
+  phone?: string;
+  location?: string;
+  linkedin?: string;
+  summary?: string;
+  experience?: { title: string; company: string; dates: string; bullets: string[] }[];
+  education?: { degree: string; school: string; year: string; notes?: string }[];
+  skills?: string[];
+}
 
 interface PackResult {
   job_title: string;
   company: string;
-  tailored_resume: string;
+  tailored_resume: ResumeData | string;
   cover_letter: string;
   provider_used: string;
 }
@@ -15,168 +25,291 @@ interface Props {
 
 type Tab = "resume" | "cover";
 
-export default function ApplicationPack({ result, onClose }: Props) {
-  const [tab, setTab] = useState<Tab>("resume");
+function buildResumeHTML(data: ResumeData, jobTitle: string, company: string): string {
+  const name = data.name || "Your Name";
+  const contact = [data.email, data.phone, data.location, data.linkedin].filter(Boolean).join("  ·  ");
 
-  function downloadText(content: string, filename: string) {
-    const blob = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+  const expHTML = (data.experience || []).map(e => `
+    <div class="exp-item">
+      <div class="exp-header">
+        <span class="exp-title">${e.title}</span>
+        <span class="exp-dates">${e.dates}</span>
+      </div>
+      <div class="exp-company">${e.company}</div>
+      <ul>${(e.bullets || []).map(b => `<li>${b}</li>`).join("")}</ul>
+    </div>`).join("");
 
-  function downloadPDF(content: string, title: string) {
-    const slug = result.company.toLowerCase().replace(/\s+/g, "-");
-    const html = `<!DOCTYPE html>
+  const eduHTML = (data.education || []).map(e => `
+    <div class="edu-item">
+      <span class="exp-title">${e.degree}</span> — ${e.school}
+      <span class="exp-dates">${e.year}</span>
+      ${e.notes ? `<div style="font-size:12px;color:#555">${e.notes}</div>` : ""}
+    </div>`).join("");
+
+  const skillsHTML = (data.skills || []).length
+    ? `<div class="skills-list">${(data.skills || []).map(s => `<span class="skill-tag">${s}</span>`).join("")}</div>`
+    : "";
+
+  return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>${title}</title>
+<title>Resume — ${name}</title>
 <style>
-  body { font-family: Georgia, serif; max-width: 780px; margin: 40px auto; padding: 0 24px; color: #1a202c; line-height: 1.6; font-size: 14px; }
-  h1 { font-size: 22px; margin-bottom: 4px; }
-  h2 { font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; margin-top: 24px; }
-  h3 { font-size: 14px; margin-bottom: 2px; }
-  ul { padding-left: 20px; }
-  li { margin-bottom: 4px; }
-  p { margin: 8px 0; }
-  pre { white-space: pre-wrap; }
-  @media print { body { margin: 20px; } }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; color: #1a1a1a; background: #fff; padding: 48px 56px; max-width: 820px; margin: 0 auto; font-size: 13.5px; line-height: 1.6; }
+  h1 { font-size: 26px; letter-spacing: -0.5px; font-weight: 700; margin-bottom: 4px; }
+  .contact { color: #555; font-size: 12px; margin-bottom: 20px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: #444; border-bottom: 1.5px solid #222; padding-bottom: 4px; margin: 22px 0 12px; font-weight: 700; }
+  .summary { color: #333; margin-bottom: 4px; }
+  .exp-item { margin-bottom: 16px; }
+  .exp-header { display: flex; justify-content: space-between; align-items: baseline; }
+  .exp-title { font-weight: 700; font-size: 14px; }
+  .exp-dates { color: #666; font-size: 12px; }
+  .exp-company { color: #555; font-size: 12.5px; margin-bottom: 6px; font-style: italic; }
+  ul { padding-left: 18px; margin-top: 4px; }
+  li { margin-bottom: 3px; color: #222; }
+  .edu-item { margin-bottom: 8px; display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px; }
+  .skills-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .skill-tag { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 2px 10px; font-size: 12px; color: #334155; }
+  .tailor-note { font-size: 11px; color: #94a3b8; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 8px; }
+  @media print {
+    body { padding: 24px 32px; }
+    .tailor-note { display: none; }
+    @page { margin: 0.6in; }
+  }
 </style>
 </head>
 <body>
-<pre style="font-family:inherit;white-space:pre-wrap">${content.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>
+  <h1>${name}</h1>
+  <div class="contact">${contact}</div>
+  ${data.summary ? `<h2>Summary</h2><p class="summary">${data.summary}</p>` : ""}
+  ${expHTML ? `<h2>Experience</h2>${expHTML}` : ""}
+  ${eduHTML ? `<h2>Education</h2>${eduHTML}` : ""}
+  ${skillsHTML ? `<h2>Skills</h2>${skillsHTML}` : ""}
+  <p class="tailor-note">Tailored for: ${jobTitle} @ ${company}</p>
 </body>
 </html>`;
+}
+
+function buildCoverHTML(text: string, jobTitle: string, company: string, name?: string): string {
+  const paragraphs = text.split(/\n{2,}/).filter(Boolean).map(p => `<p>${p.replace(/\n/g, "<br>")}</p>`).join("\n");
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Cover Letter — ${jobTitle}</title>
+<style>
+  body { font-family: 'Georgia', serif; color: #1a1a1a; background: #fff; padding: 72px 80px; max-width: 760px; margin: 0 auto; font-size: 14px; line-height: 1.8; }
+  .header { margin-bottom: 36px; }
+  .name { font-size: 20px; font-weight: 700; }
+  .to { margin: 28px 0 28px; color: #444; font-size: 13px; }
+  p { margin-bottom: 18px; }
+  .closing { margin-top: 32px; }
+  @media print { body { padding: 36px 48px; } @page { margin: 0.75in; } }
+</style>
+</head>
+<body>
+  <div class="header"><div class="name">${name || ""}</div></div>
+  <div class="to">Hiring Manager<br>${company}<br>Re: ${jobTitle}</div>
+  ${paragraphs}
+  <div class="closing">Sincerely,<br><br>${name || ""}</div>
+</body>
+</html>`;
+}
+
+export default function ApplicationPack({ result, onClose }: Props) {
+  const [tab, setTab] = useState<Tab>("resume");
+
+  // Handle both structured JSON and fallback string resume
+  const resumeData: ResumeData = typeof result.tailored_resume === "string"
+    ? { summary: result.tailored_resume }
+    : result.tailored_resume;
+
+  const resumeDisplay = typeof result.tailored_resume === "string"
+    ? result.tailored_resume
+    : formatResumeText(resumeData);
+
+  function openAndPrint(html: string) {
     const win = window.open("", "_blank");
     if (!win) return;
     win.document.write(html);
     win.document.close();
     win.focus();
-    setTimeout(() => { win.print(); }, 400);
+    setTimeout(() => win.print(), 500);
   }
 
-  const activeContent = tab === "resume" ? result.tailored_resume : result.cover_letter;
-  const company = result.company;
+  function downloadText(content: string, filename: string) {
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const titleSlug = result.job_title.toLowerCase().replace(/\s+/g, "-").slice(0, 30);
 
   return (
     <div style={overlayStyle} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={modalStyle}>
-        {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 17 }}>Application Pack</h2>
-            <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
-              {result.job_title} @ {company} · via {result.provider_used}
+            <h2 style={{ margin: 0, fontSize: 17 }}>Application Pack — Ready to Submit</h2>
+            <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>
+              {result.job_title} @ {result.company}
+              <span style={{ marginLeft: 8, background: "#f1f5f9", padding: "1px 7px", borderRadius: 4, fontSize: 11 }}>
+                {result.provider_used}
+              </span>
             </div>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#94a3b8", lineHeight: 1 }}>×</button>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#94a3b8" }}>×</button>
         </div>
 
         {/* Tabs */}
         <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
           {(["resume", "cover"] as Tab[]).map(t => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              style={{
-                padding: "6px 16px",
-                fontSize: 13,
-                fontWeight: 600,
-                border: "1px solid #e2e8f0",
-                borderRadius: 6,
-                cursor: "pointer",
-                background: tab === t ? "#1e293b" : "#fff",
-                color: tab === t ? "#fff" : "#374151",
-              }}
-            >
-              {t === "resume" ? "Tailored Resume" : "Cover Letter"}
+            <button key={t} onClick={() => setTab(t)} style={{
+              padding: "7px 18px", fontSize: 13, fontWeight: 600,
+              border: "1px solid #e2e8f0", borderRadius: 6, cursor: "pointer",
+              background: tab === t ? "#1e293b" : "#fff",
+              color: tab === t ? "#fff" : "#374151",
+            }}>
+              {t === "resume" ? "📄 Tailored Resume" : "✉️ Cover Letter"}
             </button>
           ))}
         </div>
 
-        {/* Content */}
+        {/* Preview */}
         <div style={{
-          background: "#f8fafc",
-          border: "1px solid #e2e8f0",
-          borderRadius: 8,
-          padding: "16px 18px",
-          maxHeight: "50vh",
-          overflowY: "auto",
-          fontFamily: "Georgia, serif",
-          fontSize: 13,
-          lineHeight: 1.7,
-          whiteSpace: "pre-wrap",
+          background: "#fafafa", border: "1px solid #e2e8f0", borderRadius: 8,
+          padding: "16px 18px", maxHeight: "46vh", overflowY: "auto",
+          fontFamily: "Georgia, serif", fontSize: 13, lineHeight: 1.7,
           color: "#1a202c",
         }}>
-          {activeContent}
+          {tab === "resume"
+            ? <ResumePreview data={resumeData} fallback={resumeDisplay} />
+            : <div style={{ whiteSpace: "pre-wrap" }}>{result.cover_letter}</div>
+          }
         </div>
 
-        {/* Actions */}
-        <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "flex-end", flexWrap: "wrap" }}>
+        {/* Download actions */}
+        <div style={{ marginTop: 14, display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
           <button
-            onClick={() => downloadText(activeContent, tab === "resume" ? `resume-${titleSlug}.md` : `cover-letter-${titleSlug}.txt`)}
+            onClick={() => downloadText(
+              tab === "resume" ? resumeDisplay : result.cover_letter,
+              tab === "resume" ? `resume-${titleSlug}.txt` : `cover-letter-${titleSlug}.txt`
+            )}
             style={secondaryBtn}
           >
             Download .txt
           </button>
           <button
-            onClick={() => downloadPDF(activeContent, tab === "resume" ? `Resume — ${result.job_title}` : `Cover Letter — ${result.job_title}`)}
+            onClick={() => {
+              const html = tab === "resume"
+                ? buildResumeHTML(resumeData, result.job_title, result.company)
+                : buildCoverHTML(result.cover_letter, result.job_title, result.company, resumeData.name);
+              openAndPrint(html);
+            }}
             style={primaryBtn}
           >
-            Download PDF
+            🖨 Print / Save as PDF
           </button>
-          {tab === "resume" ? (
-            <button onClick={() => setTab("cover")} style={secondaryBtn}>View Cover Letter →</button>
-          ) : (
-            <button onClick={() => setTab("resume")} style={secondaryBtn}>← View Resume</button>
-          )}
         </div>
       </div>
     </div>
   );
 }
 
-const overlayStyle: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.5)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 200,
-  padding: 16,
-};
+function ResumePreview({ data, fallback }: { data: ResumeData; fallback: string }) {
+  if (!data.name && !data.experience?.length) {
+    return <div style={{ whiteSpace: "pre-wrap", fontSize: 12, fontFamily: "monospace" }}>{fallback}</div>;
+  }
+  const contact = [data.email, data.phone, data.location].filter(Boolean).join(" · ");
+  return (
+    <div>
+      {data.name && <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 2 }}>{data.name}</div>}
+      {contact && <div style={{ fontSize: 12, color: "#666", marginBottom: 14 }}>{contact}</div>}
+      {data.summary && <><SectionHead>Summary</SectionHead><p>{data.summary}</p></>}
+      {data.experience?.length ? (
+        <><SectionHead>Experience</SectionHead>
+        {data.experience.map((e, i) => (
+          <div key={i} style={{ marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <strong>{e.title}</strong><span style={{ fontSize: 11, color: "#666" }}>{e.dates}</span>
+            </div>
+            <div style={{ fontStyle: "italic", fontSize: 12, color: "#555", marginBottom: 4 }}>{e.company}</div>
+            <ul style={{ paddingLeft: 18, margin: 0 }}>
+              {(e.bullets || []).map((b, j) => <li key={j} style={{ marginBottom: 2 }}>{b}</li>)}
+            </ul>
+          </div>
+        ))}</>
+      ) : null}
+      {data.education?.length ? (
+        <><SectionHead>Education</SectionHead>
+        {data.education.map((e, i) => (
+          <div key={i} style={{ marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+            <span><strong>{e.degree}</strong> — {e.school}</span>
+            <span style={{ fontSize: 11, color: "#666" }}>{e.year}</span>
+          </div>
+        ))}</>
+      ) : null}
+      {data.skills?.length ? (
+        <><SectionHead>Skills</SectionHead>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+          {data.skills.map((s, i) => (
+            <span key={i} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 4, padding: "1px 8px", fontSize: 11 }}>{s}</span>
+          ))}
+        </div></>
+      ) : null}
+    </div>
+  );
+}
 
+function SectionHead({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1.5, color: "#444", borderBottom: "1.5px solid #222", paddingBottom: 3, margin: "16px 0 8px", fontWeight: 700 }}>
+      {children}
+    </div>
+  );
+}
+
+function formatResumeText(data: ResumeData): string {
+  const lines: string[] = [];
+  if (data.name) lines.push(data.name);
+  const contact = [data.email, data.phone, data.location].filter(Boolean).join(" · ");
+  if (contact) lines.push(contact);
+  if (data.summary) { lines.push("", "SUMMARY", data.summary); }
+  if (data.experience?.length) {
+    lines.push("", "EXPERIENCE");
+    for (const e of data.experience) {
+      lines.push(`${e.title} | ${e.company} | ${e.dates}`);
+      for (const b of e.bullets || []) lines.push(`  • ${b}`);
+    }
+  }
+  if (data.education?.length) {
+    lines.push("", "EDUCATION");
+    for (const e of data.education) lines.push(`${e.degree} — ${e.school} (${e.year})`);
+  }
+  if (data.skills?.length) lines.push("", "SKILLS", data.skills.join(", "));
+  return lines.join("\n");
+}
+
+import { useState } from "react";
+
+const overlayStyle: React.CSSProperties = {
+  position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
+  display: "flex", alignItems: "center", justifyContent: "center",
+  zIndex: 200, padding: 16,
+};
 const modalStyle: React.CSSProperties = {
-  background: "#fff",
-  borderRadius: 12,
-  padding: 24,
-  width: "100%",
-  maxWidth: 700,
-  maxHeight: "90vh",
-  overflowY: "auto",
+  background: "#fff", borderRadius: 12, padding: 24,
+  width: "100%", maxWidth: 720, maxHeight: "92vh", overflowY: "auto",
   boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
 };
-
 const primaryBtn: React.CSSProperties = {
-  padding: "8px 18px",
-  background: "#2563eb",
-  color: "#fff",
-  border: "none",
-  borderRadius: 6,
-  cursor: "pointer",
-  fontSize: 13,
-  fontWeight: 600,
+  padding: "8px 18px", background: "#2563eb", color: "#fff",
+  border: "none", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600,
 };
-
 const secondaryBtn: React.CSSProperties = {
-  ...primaryBtn,
-  background: "#f1f5f9",
-  color: "#334155",
-  border: "1px solid #e2e8f0",
+  ...primaryBtn, background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0",
 };

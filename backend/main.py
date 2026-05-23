@@ -14,7 +14,8 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from pathlib import Path
 
-from .database import JobRow, SessionLocal, get_db, init_db
+from fastapi import UploadFile, File
+from .database import JobRow, ProfileRow, SessionLocal, get_db, init_db
 from .models import (
     AnalyzeRequest,
     ApplicationPackRequest,
@@ -24,6 +25,8 @@ from .models import (
     JobSource,
     JobType,
     JobUpdate,
+    ProfileIn,
+    ProfileOut,
     SalaryRange,
     JobLocation,
 )
@@ -267,13 +270,23 @@ async def generate_application_pack(
     if not row:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    # Use stored profile resume if none provided in payload
+    resume_text = payload.resume_text
+    if not resume_text:
+        from .profile import get_profile
+        profile = get_profile(db)
+        if profile and profile.resume_text:
+            resume_text = profile.resume_text
+        else:
+            raise HTTPException(status_code=422, detail="No resume provided and no profile saved. Upload your resume first.")
+
     try:
         provider_used, _ = _pick_provider(payload.provider, payload.api_key)
         tailored, cover = await asyncio.gather(
             tailor_resume(
                 job_title=row.title,
                 job_description=row.description or "",
-                resume_text=payload.resume_text,
+                resume_text=resume_text,
                 provider=payload.provider,
                 model=payload.model,
                 api_key=payload.api_key,
@@ -282,7 +295,7 @@ async def generate_application_pack(
                 job_title=row.title,
                 company=row.company,
                 job_description=row.description or "",
-                resume_text=payload.resume_text,
+                resume_text=resume_text,
                 provider=payload.provider,
                 model=payload.model,
                 api_key=payload.api_key,
@@ -347,6 +360,84 @@ async def ai_search(
         "count": len(rows),
         "jobs": [row_to_job(r) for r in rows],
     }
+
+
+# ── Profile ──────────────────────────────────────────────────────────
+
+
+@app.get("/api/profile", response_model=ProfileOut, tags=["profile"])
+def get_profile_route(db: Session = Depends(get_db)):
+    from .profile import get_profile
+    row = get_profile(db)
+    if not row:
+        raise HTTPException(status_code=404, detail="No profile saved yet")
+    return ProfileOut(
+        id=row.id, name=row.name, email=row.email, phone=row.phone,
+        location=row.location, linkedin_url=row.linkedin_url,
+        resume_text=row.resume_text, updated_at=row.updated_at,
+    )
+
+
+@app.post("/api/profile", response_model=ProfileOut, tags=["profile"])
+def save_profile(payload: ProfileIn, db: Session = Depends(get_db)):
+    from .profile import upsert_profile
+    row = upsert_profile(db, **payload.model_dump(exclude_none=True))
+    return ProfileOut(
+        id=row.id, name=row.name, email=row.email, phone=row.phone,
+        location=row.location, linkedin_url=row.linkedin_url,
+        resume_text=row.resume_text, updated_at=row.updated_at,
+    )
+
+
+@app.post("/api/profile/upload", response_model=ProfileOut, tags=["profile"])
+async def upload_resume(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Upload PDF, DOCX, or TXT resume — text is extracted and stored."""
+    from .profile import parse_pdf, parse_docx, upsert_profile
+    data = await file.read()
+    fname = (file.filename or "").lower()
+    if fname.endswith(".pdf"):
+        text = parse_pdf(data)
+    elif fname.endswith(".docx"):
+        text = parse_docx(data)
+    else:
+        text = data.decode("utf-8", errors="replace")
+    if not text.strip():
+        raise HTTPException(status_code=422, detail="Could not extract text from file")
+    row = upsert_profile(db, resume_text=text)
+    return ProfileOut(
+        id=row.id, name=row.name, email=row.email, phone=row.phone,
+        location=row.location, linkedin_url=row.linkedin_url,
+        resume_text=row.resume_text, updated_at=row.updated_at,
+    )
+
+
+@app.post("/api/profile/linkedin", response_model=ProfileOut, tags=["profile"])
+async def import_linkedin(url: str = Query(...), db: Session = Depends(get_db)):
+    """Import profile text from a public LinkedIn URL."""
+    from .profile import import_linkedin as fetch_linkedin, upsert_profile
+    from .ai import _pick_provider, _call_provider, PROVIDERS, _strip_json
+    try:
+        raw_text = await fetch_linkedin(url)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not fetch LinkedIn: {e}")
+
+    # Use AI to structure the scraped text into a clean resume
+    try:
+        provider, key = _pick_provider("nvidia", None)
+        model = PROVIDERS[provider]["default_model"]
+        system = "Convert the following LinkedIn profile page text into a clean, structured resume in plain text. Extract: name, contact, summary, work experience with dates and bullets, education, skills. Output plain text only."
+        structured = await _call_provider(provider, model, system, raw_text, key)
+    except Exception:
+        structured = raw_text  # fall back to raw if AI unavailable
+
+    row = upsert_profile(db, linkedin_url=url, resume_text=structured)
+    return ProfileOut(
+        id=row.id, name=row.name, email=row.email, phone=row.phone,
+        location=row.location, linkedin_url=row.linkedin_url,
+        resume_text=row.resume_text, updated_at=row.updated_at,
+    )
 
 
 # ── Stats ────────────────────────────────────────────────────────────

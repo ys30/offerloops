@@ -5,6 +5,7 @@ import JobCard from "./components/JobCard";
 import JobDetail from "./components/JobDetail";
 import AddJobForm from "./components/AddJobForm";
 import IngestPanel from "./components/IngestPanel";
+import ProfilePage from "./pages/ProfilePage";
 
 export default function App() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -12,6 +13,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [showIngest, setShowIngest] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // Search / filter state
@@ -43,10 +45,21 @@ export default function App() {
 
   const selected = jobs.find(j => j.id === selectedId);
 
+  if (showProfile) {
+    return (
+      <div style={pageStyle}>
+        <Header stats={stats} onProfile={() => setShowProfile(false)} profileActive />
+        <main style={mainStyle}>
+          <ProfilePage onBack={() => setShowProfile(false)} />
+        </main>
+      </div>
+    );
+  }
+
   if (selected) {
     return (
       <div style={pageStyle}>
-        <Header stats={stats} />
+        <Header stats={stats} onProfile={() => setShowProfile(true)} />
         <main style={mainStyle}>
           <JobDetail
             job={selected}
@@ -64,7 +77,7 @@ export default function App() {
 
   return (
     <div style={pageStyle}>
-      <Header stats={stats} />
+      <Header stats={stats} onProfile={() => setShowProfile(true)} />
       <main style={mainStyle}>
         {/* Search bar */}
         <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
@@ -138,22 +151,30 @@ export default function App() {
   );
 }
 
-function Header({ stats }: { stats: Stats | null }) {
+function Header({ stats, onProfile, profileActive }: { stats: Stats | null; onProfile: () => void; profileActive?: boolean }) {
   return (
     <header style={{
-      background: "#1e293b",
-      color: "#fff",
-      padding: "14px 24px",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 16,
+      background: "#1e293b", color: "#fff", padding: "12px 24px",
+      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16,
     }}>
-      <div>
-        <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: -0.5 }}>FlowHire</span>
-        <span style={{ marginLeft: 8, fontSize: 11, color: "#94a3b8", fontWeight: 400 }}>
-          open API · Claude Opus 4.7
-        </span>
+      <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+        <div>
+          <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: -0.5 }}>FlowHire</span>
+          <span style={{ marginLeft: 8, fontSize: 11, color: "#94a3b8", fontWeight: 400 }}>
+            open API · multi-model AI
+          </span>
+        </div>
+        <button
+          onClick={onProfile}
+          style={{
+            padding: "5px 14px", fontSize: 12, fontWeight: 600, borderRadius: 6, cursor: "pointer",
+            background: profileActive ? "#fff" : "rgba(255,255,255,0.12)",
+            color: profileActive ? "#1e293b" : "#e2e8f0",
+            border: "1px solid rgba(255,255,255,0.2)",
+          }}
+        >
+          👤 My Profile
+        </button>
       </div>
       {stats && (
         <div style={{ display: "flex", gap: 16, fontSize: 12, color: "#94a3b8" }}>

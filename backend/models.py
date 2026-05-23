@@ -122,7 +122,7 @@ class AnalyzeResult(BaseModel):
 
 class ApplicationPackRequest(BaseModel):
     job_id: str
-    resume_text: str
+    resume_text: Optional[str] = None   # uses stored profile if omitted
     provider: str = "nvidia"
     model: Optional[str] = None
     api_key: Optional[str] = None
@@ -132,6 +132,26 @@ class ApplicationPackResult(BaseModel):
     job_id: str
     job_title: str
     company: str
-    tailored_resume: str    # markdown
+    tailored_resume: dict   # structured JSON with name/experience/education/skills
     cover_letter: str       # plain text
     provider_used: str
+
+
+class ProfileIn(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    resume_text: Optional[str] = None
+
+
+class ProfileOut(BaseModel):
+    id: str
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    resume_text: Optional[str] = None
+    updated_at: Optional[datetime] = None
