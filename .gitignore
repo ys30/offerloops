@@ -1,0 +1,16 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+backend/jobs.db
+
+# Environment — never commit secrets
+.env
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
