@@ -23,6 +23,7 @@ export default function ScoreAllPanel({ onDone, onClose }: Props) {
   const [provider, setProvider] = useState("anthropic");
   const [apiKey, setApiKey] = useState("");
   const [rescore, setRescore] = useState(false);
+  const [recentOnly, setRecentOnly] = useState(true);
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
   const [total, setTotal] = useState(0);
@@ -42,6 +43,7 @@ export default function ScoreAllPanel({ onDone, onClose }: Props) {
     setFailed(0);
 
     const qs = new URLSearchParams({ provider, rescore: String(rescore) });
+    if (recentOnly) qs.set("days", "7");
     if (apiKey) qs.set("api_key", apiKey);
 
     const ctrl = new AbortController();
@@ -162,6 +164,15 @@ export default function ScoreAllPanel({ onDone, onClose }: Props) {
           placeholder="API key (optional if set server-side)"
           style={inp}
         />
+        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#64748b", cursor: "pointer", whiteSpace: "nowrap" }}>
+          <input
+            type="checkbox"
+            checked={recentOnly}
+            onChange={e => setRecentOnly(e.target.checked)}
+            disabled={running}
+          />
+          Posted in last 7 days only
+        </label>
         <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#64748b", cursor: "pointer", whiteSpace: "nowrap" }}>
           <input
             type="checkbox"

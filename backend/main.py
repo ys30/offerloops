@@ -332,9 +332,11 @@ async def score_all_jobs(
     model: Optional[str] = Query(None),
     rescore: bool = Query(False, description="Re-score jobs that already have a score"),
     concurrency: int = Query(3, le=10, description="Max concurrent AI calls"),
+    days: Optional[int] = Query(None, description="Only score jobs posted within this many days (e.g. 7). Omit for all jobs."),
     db: Session = Depends(get_db),
 ):
     """Score all jobs against the saved profile resume. Streams SSE progress events."""
+    from datetime import timedelta
     from .profile import get_profile
     from .ai import analyze_job_fit
 
@@ -345,6 +347,9 @@ async def score_all_jobs(
     q = db.query(JobRow)
     if not rescore:
         q = q.filter(JobRow.ai_score.is_(None))
+    if days is not None:
+        cutoff = datetime.utcnow() - timedelta(days=days)
+        q = q.filter(JobRow.posted_date >= cutoff)
     rows = q.all()
     job_data = [(r.id, r.title, r.description or "") for r in rows]
     resume_text = profile.resume_text
