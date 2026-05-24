@@ -96,12 +96,12 @@ def _strip_json(raw: str) -> str:
 
 # ── Provider implementations ─────────────────────────────────────────
 
-async def _call_anthropic(system: str, user: str, model: str, api_key: str) -> str:
+async def _call_anthropic(system: str, user: str, model: str, api_key: str, max_tokens: int = 1024) -> str:
     import anthropic
     client = anthropic.Anthropic(api_key=api_key)
     resp = client.messages.create(
         model=model,
-        max_tokens=1024,
+        max_tokens=max_tokens,
         system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
         messages=[{"role": "user", "content": user}],
     )
@@ -109,7 +109,8 @@ async def _call_anthropic(system: str, user: str, model: str, api_key: str) -> s
 
 
 async def _call_openai_compat(
-    system: str, user: str, model: str, api_key: str, base_url: Optional[str] = None
+    system: str, user: str, model: str, api_key: str,
+    base_url: Optional[str] = None, max_tokens: int = 1024,
 ) -> str:
     from openai import OpenAI
     kwargs: dict = {"api_key": api_key}
@@ -122,13 +123,13 @@ async def _call_openai_compat(
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-        max_tokens=1024,
+        max_tokens=max_tokens,
         temperature=0.2,
     )
     return resp.choices[0].message.content or ""
 
 
-async def _call_gemini(system: str, user: str, model: str, api_key: str) -> str:
+async def _call_gemini(system: str, user: str, model: str, api_key: str, max_tokens: int = 1024) -> str:
     import google.generativeai as genai
     genai.configure(api_key=api_key)
     gmodel = genai.GenerativeModel(
@@ -140,17 +141,17 @@ async def _call_gemini(system: str, user: str, model: str, api_key: str) -> str:
 
 
 async def _call_provider(
-    provider: str, model: str, system: str, user: str, api_key: str
+    provider: str, model: str, system: str, user: str, api_key: str, max_tokens: int = 1024,
 ) -> str:
     if provider == "anthropic":
-        return await _call_anthropic(system, user, model, api_key)
+        return await _call_anthropic(system, user, model, api_key, max_tokens=max_tokens)
     elif provider == "openai":
-        return await _call_openai_compat(system, user, model, api_key)
+        return await _call_openai_compat(system, user, model, api_key, max_tokens=max_tokens)
     elif provider == "nvidia":
         base_url = PROVIDERS["nvidia"]["base_url"]
-        return await _call_openai_compat(system, user, model, api_key, base_url=base_url)
+        return await _call_openai_compat(system, user, model, api_key, base_url=base_url, max_tokens=max_tokens)
     elif provider == "gemini":
-        return await _call_gemini(system, user, model, api_key)
+        return await _call_gemini(system, user, model, api_key, max_tokens=max_tokens)
     else:
         raise ValueError(f"Unknown provider: {provider}")
 

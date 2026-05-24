@@ -5,6 +5,7 @@ import JobCard from "./components/JobCard";
 import JobDetail from "./components/JobDetail";
 import AddJobForm from "./components/AddJobForm";
 import IngestPanel from "./components/IngestPanel";
+import ScoreAllPanel from "./components/ScoreAllPanel";
 import ProfilePage from "./pages/ProfilePage";
 
 export default function App() {
@@ -13,6 +14,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [showIngest, setShowIngest] = useState(false);
+  const [showScoreAll, setShowScoreAll] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -113,12 +115,22 @@ export default function App() {
           <button onClick={() => setShowIngest(v => !v)} style={secondaryBtn}>
             {showIngest ? "Hide Import" : "Import from Source"}
           </button>
+          <button onClick={() => setShowScoreAll(v => !v)} style={secondaryBtn}>
+            {showScoreAll ? "Hide Score All" : "⚡ Score All"}
+          </button>
         </div>
 
         {showIngest && (
           <div style={{ marginBottom: 16 }}>
             <IngestPanel onDone={() => { loadJobs(); loadStats(); }} />
           </div>
+        )}
+
+        {showScoreAll && (
+          <ScoreAllPanel
+            onDone={() => { loadJobs(); loadStats(); }}
+            onClose={() => setShowScoreAll(false)}
+          />
         )}
 
         {/* Results */}

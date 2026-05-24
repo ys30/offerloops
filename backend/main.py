@@ -9,7 +9,7 @@ from typing import Optional
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from pathlib import Path
@@ -234,12 +234,21 @@ async def analyze_job(payload: AnalyzeRequest, db: Session = Depends(get_db)):
     if not row:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    resume_text = payload.resume_text
+    if not resume_text:
+        from .profile import get_profile
+        profile = get_profile(db)
+        if profile and profile.resume_text:
+            resume_text = profile.resume_text
+        else:
+            raise HTTPException(status_code=422, detail="No resume provided and no profile saved. Upload your resume first.")
+
     try:
         result = await analyze_job_fit(
             job_id=payload.job_id,
             job_title=row.title,
             job_description=row.description or "",
-            resume_text=payload.resume_text,
+            resume_text=resume_text,
             provider=payload.provider,
             model=payload.model,
             api_key=payload.api_key,
@@ -313,6 +322,86 @@ async def generate_application_pack(
         tailored_resume=tailored,
         cover_letter=cover,
         provider_used=provider_used,
+    )
+
+
+@app.post("/api/ai/score-all", tags=["ai"])
+async def score_all_jobs(
+    provider: str = Query("anthropic", description="AI provider: anthropic|openai|nvidia|gemini"),
+    api_key: Optional[str] = Query(None, description="Provider API key (BYOK)"),
+    model: Optional[str] = Query(None),
+    rescore: bool = Query(False, description="Re-score jobs that already have a score"),
+    concurrency: int = Query(3, le=10, description="Max concurrent AI calls"),
+    db: Session = Depends(get_db),
+):
+    """Score all jobs against the saved profile resume. Streams SSE progress events."""
+    from .profile import get_profile
+    from .ai import analyze_job_fit
+
+    profile = get_profile(db)
+    if not profile or not profile.resume_text:
+        raise HTTPException(status_code=422, detail="No profile resume saved. Upload your resume on the Profile page first.")
+
+    q = db.query(JobRow)
+    if not rescore:
+        q = q.filter(JobRow.ai_score.is_(None))
+    rows = q.all()
+    job_data = [(r.id, r.title, r.description or "") for r in rows]
+    resume_text = profile.resume_text
+
+    async def generate():
+        total = len(job_data)
+        scored = 0
+        failed = 0
+
+        yield f"data: {json.dumps({'type': 'start', 'total': total})}\n\n"
+
+        if total == 0:
+            yield f"data: {json.dumps({'type': 'done', 'scored': 0, 'failed': 0, 'total': 0})}\n\n"
+            return
+
+        sem = asyncio.Semaphore(concurrency)
+
+        async def score_one(job_id: str, job_title: str, job_description: str):
+            async with sem:
+                try:
+                    result = await analyze_job_fit(
+                        job_id=job_id,
+                        job_title=job_title,
+                        job_description=job_description,
+                        resume_text=resume_text,
+                        provider=provider,
+                        model=model,
+                        api_key=api_key,
+                    )
+                    with SessionLocal() as write_db:
+                        row = write_db.get(JobRow, job_id)
+                        if row:
+                            row.ai_score = result.score
+                            row.ai_summary = result.summary
+                            row.ai_tags = json.dumps(result.extracted_requirements)
+                            row.updated_at = datetime.utcnow()
+                            write_db.commit()
+                    return ("ok", job_id, job_title, result.score)
+                except Exception as e:
+                    return ("error", job_id, job_title, str(e))
+
+        tasks = [asyncio.create_task(score_one(jid, jtitle, jdesc)) for jid, jtitle, jdesc in job_data]
+        for fut in asyncio.as_completed(tasks):
+            status, job_id, job_title, payload = await fut
+            if status == "ok":
+                scored += 1
+                yield f"data: {json.dumps({'type': 'progress', 'job_id': job_id, 'title': job_title, 'score': payload, 'scored': scored, 'failed': failed, 'total': total})}\n\n"
+            else:
+                failed += 1
+                yield f"data: {json.dumps({'type': 'error', 'job_id': job_id, 'title': job_title, 'error': payload, 'scored': scored, 'failed': failed, 'total': total})}\n\n"
+
+        yield f"data: {json.dumps({'type': 'done', 'scored': scored, 'failed': failed, 'total': total})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
     )
 
 

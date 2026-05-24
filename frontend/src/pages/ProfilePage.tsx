@@ -36,7 +36,10 @@ async function uploadResume(file: File): Promise<Profile> {
 
 async function importLinkedIn(url: string): Promise<Profile> {
   const res = await fetch(`/api/profile/linkedin?url=${encodeURIComponent(url)}`, { method: "POST" });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    const body = await res.text();
+    try { throw new Error(JSON.parse(body).detail); } catch { throw new Error(body); }
+  }
   return res.json();
 }
 

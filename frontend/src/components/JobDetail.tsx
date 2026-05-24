@@ -27,11 +27,10 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
   const [error, setError] = useState("");
 
   async function handleAnalyze() {
-    if (!resume.trim()) return;
     setAnalyzing(true);
     setError("");
     try {
-      const r = await analyzeJob(job.id, resume, provider, apiKey || undefined);
+      const r = await analyzeJob(job.id, resume || undefined, provider, apiKey || undefined);
       setResult(r);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -174,7 +173,7 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
           <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
             <button
               onClick={handleAnalyze}
-              disabled={analyzing || generating || !resume.trim()}
+              disabled={analyzing || generating}
               style={btnStyle("#2563eb", "#fff")}
             >
               {analyzing ? "Scoring…" : `Score fit`}

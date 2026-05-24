@@ -81,14 +81,14 @@ export async function generateApplicationPack(
 
 export async function analyzeJob(
   jobId: string,
-  resumeText: string,
+  resumeText: string | undefined,
   provider: string = "anthropic",
   apiKey?: string
 ): Promise<Record<string, unknown>> {
   const res = await fetch(`${BASE}/ai/analyze`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ job_id: jobId, resume_text: resumeText, provider, api_key: apiKey }),
+    body: JSON.stringify({ job_id: jobId, resume_text: resumeText || undefined, provider, api_key: apiKey }),
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
