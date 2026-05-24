@@ -391,18 +391,59 @@ def save_profile(payload: ProfileIn, db: Session = Depends(get_db)):
 
 @app.post("/api/profile/upload", response_model=ProfileOut, tags=["profile"])
 async def upload_resume(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    """Upload PDF, DOCX, or TXT resume — text is extracted and stored."""
+    """Upload PDF, DOCX, DOC, or TXT resume — text is extracted and stored."""
     from .profile import parse_pdf, parse_docx, upsert_profile
     data = await file.read()
     fname = (file.filename or "").lower()
+    text = ""
+    errors = []
+
+    # Try by extension first, then fall back to other parsers
     if fname.endswith(".pdf"):
-        text = parse_pdf(data)
-    elif fname.endswith(".docx"):
-        text = parse_docx(data)
+        try:
+            text = parse_pdf(data)
+        except Exception as e:
+            errors.append(f"PDF parse failed: {e}")
+    elif fname.endswith(".docx") or fname.endswith(".doc"):
+        try:
+            text = parse_docx(data)
+        except Exception as e:
+            errors.append(f"DOCX parse failed: {e}")
+            # .doc (old Word) — try extracting raw text
+            try:
+                text = data.decode("utf-8", errors="ignore")
+                # Strip binary noise: keep only printable ASCII lines
+                import re
+                lines = [l for l in text.splitlines() if re.search(r"[a-zA-Z]{3,}", l)]
+                text = "\n".join(lines[:200])
+            except Exception:
+                pass
     else:
+        # TXT, MD, or unknown — decode as UTF-8
         text = data.decode("utf-8", errors="replace")
+
+    # If extension-based parse gave nothing, try PDF as fallback
+    if not text.strip() and not fname.endswith(".pdf"):
+        try:
+            text = parse_pdf(data)
+        except Exception:
+            pass
+
     if not text.strip():
-        raise HTTPException(status_code=422, detail="Could not extract text from file")
+        detail = "Could not extract text from file."
+        if errors:
+            detail += " " + errors[0]
+        detail += " Try saving as PDF or .docx, or paste your resume text directly."
+        raise HTTPException(status_code=422, detail=detail)
+
+    text = text.strip()
+
+    # If text looks garbled (long runs without spaces), clean it with AI
+    long_words = [w for w in text.split() if len(w) > 25 and w.isalpha()]
+    if len(long_words) > 3:
+        from .profile import clean_resume_with_ai
+        text = await clean_resume_with_ai(text)
+
     row = upsert_profile(db, resume_text=text)
     return ProfileOut(
         id=row.id, name=row.name, email=row.email, phone=row.phone,

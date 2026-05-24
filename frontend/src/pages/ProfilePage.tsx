@@ -154,9 +154,9 @@ export default function ProfilePage({ onBack }: { onBack: () => void }) {
           <div style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>
             {uploading ? "Extracting text…" : "Drop PDF, DOCX, or TXT here — or click to browse"}
           </div>
-          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>Supports .pdf · .docx · .txt</div>
+          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>Supports .pdf · .docx · .doc · .txt · .md</div>
         </div>
-        <input ref={fileRef} type="file" accept=".pdf,.docx,.txt" onChange={handleUpload} style={{ display: "none" }} />
+        <input ref={fileRef} type="file" accept=".pdf,.docx,.doc,.txt,.md" onChange={handleUpload} style={{ display: "none" }} />
       </section>
 
       {/* LinkedIn import */}
