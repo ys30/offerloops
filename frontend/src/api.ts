@@ -297,3 +297,52 @@ export async function fetchEmailEvents(jobId?: string): Promise<EmailEvent[]> {
   if (!res.ok) return [];
   return res.json();
 }
+
+// ── STAR Story Bank ────────────────────────────────────────────────
+
+export interface Story {
+  id: string;
+  user_id: string;
+  job_id?: string;
+  job_title?: string;
+  job_company?: string;
+  title: string;
+  situation?: string;
+  task?: string;
+  action?: string;
+  result?: string;
+  skills: string[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export async function fetchStories(jobId?: string): Promise<Story[]> {
+  const qs = jobId ? `?job_id=${jobId}` : "";
+  const res = await fetch(`${BASE}/stories${qs}`, { headers: authHeaders() });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function createStory(payload: Omit<Story, "id" | "user_id" | "job_title" | "job_company" | "created_at" | "updated_at">): Promise<Story> {
+  const res = await fetch(`${BASE}/stories`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function updateStory(id: string, payload: Omit<Story, "id" | "user_id" | "job_title" | "job_company" | "created_at" | "updated_at">): Promise<Story> {
+  const res = await fetch(`${BASE}/stories/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function deleteStory(id: string): Promise<void> {
+  await fetch(`${BASE}/stories/${id}`, { method: "DELETE", headers: authHeaders() });
+}

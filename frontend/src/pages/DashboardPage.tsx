@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { fetchDashboard, fetchPatterns } from "../api";
-import type { PatternRow } from "../api";
+import { fetchDashboard, fetchPatterns, fetchStories, deleteStory } from "../api";
+import type { PatternRow, Story } from "../api";
 
 interface Funnel { interested: number; applied: number; responded: number; interview: number; offer: number; rejected: number }
 interface WeekPoint { week: string; count: number }
@@ -38,6 +38,8 @@ export default function DashboardPage({ onSelectJob }: { onSelectJob: (id: strin
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [patterns, setPatterns] = useState<{ by_industry: PatternRow[]; by_source: PatternRow[]; by_score_band: PatternRow[]; total: number } | null>(null);
   const [patternTab, setPatternTab] = useState<"industry" | "source" | "score">("industry");
+  const [stories, setStories] = useState<Story[]>([]);
+  const [expandedStory, setExpandedStory] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDashboard()
@@ -45,6 +47,7 @@ export default function DashboardPage({ onSelectJob }: { onSelectJob: (id: strin
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
     fetchPatterns().then(setPatterns).catch(() => null);
+    fetchStories().then(setStories).catch(() => null);
   }, []);
 
   if (loading) return <div style={{ textAlign: "center", padding: 60, color: "#94a3b8" }}>Loading dashboard…</div>;
@@ -343,6 +346,65 @@ export default function DashboardPage({ onSelectJob }: { onSelectJob: (id: strin
           </div>
           <div style={{ marginTop: 10, fontSize: 11, color: "#94a3b8" }}>
             Green bar = % of applications that got a positive response (phone screen, interview, or offer)
+          </div>
+        </div>
+      )}
+
+      {/* ── Story Bank ───────────────────────────────────────── */}
+      {stories.length > 0 && (
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "18px 20px", marginBottom: 16 }}>
+          <h2 style={sectionTitle}>📖 Interview Story Bank ({stories.length})</h2>
+          <p style={{ fontSize: 12, color: "#94a3b8", margin: "0 0 14px" }}>
+            Your saved STAR stories — add more from any job detail page.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {stories.map(s => {
+              const isOpen = expandedStory === s.id;
+              return (
+                <div key={s.id} style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
+                  <button
+                    onClick={() => setExpandedStory(isOpen ? null : s.id)}
+                    style={{ width: "100%", padding: "10px 14px", background: isOpen ? "#f5f3ff" : "#fff",
+                      border: "none", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 10 }}
+                  >
+                    <span style={{ fontSize: 14 }}>📖</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>{s.title}</div>
+                      {s.job_company && (
+                        <div style={{ fontSize: 11, color: "#94a3b8" }}>{s.job_company}{s.job_title ? ` — ${s.job_title}` : ""}</div>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      {s.skills.slice(0, 3).map(sk => (
+                        <span key={sk} style={{ fontSize: 10, background: "#ede9fe", color: "#6d28d9", borderRadius: 99, padding: "2px 7px", fontWeight: 600 }}>{sk}</span>
+                      ))}
+                    </div>
+                    <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 8 }}>{isOpen ? "▲" : "▼"}</span>
+                  </button>
+                  {isOpen && (
+                    <div style={{ padding: "0 14px 14px" }}>
+                      {[["Situation", s.situation], ["Task", s.task], ["Action", s.action], ["Result", s.result]].map(([label, text]) =>
+                        text ? (
+                          <div key={label as string} style={{ marginTop: 10, fontSize: 13 }}>
+                            <span style={{ fontWeight: 700, color: "#6366f1" }}>{label}: </span>
+                            <span style={{ color: "#374151" }}>{text}</span>
+                          </div>
+                        ) : null
+                      )}
+                      <button
+                        onClick={async () => { await deleteStory(s.id); setStories(prev => prev.filter(x => x.id !== s.id)); }}
+                        style={{ marginTop: 12, fontSize: 12, color: "#dc2626", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                      >
+                        Delete story
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ marginTop: 10, fontSize: 11, color: "#94a3b8" }}>
+            To add stories, open any job → scroll to "STAR Stories" section.
           </div>
         </div>
       )}

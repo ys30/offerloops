@@ -136,6 +136,24 @@ class ProfileRow(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class StoryRow(Base):
+    __tablename__ = "stories"
+
+    id = Column(String, primary_key=True, default=lambda: str(__import__("uuid").uuid4()))
+    user_id = Column(String, index=True, nullable=False)
+    job_id = Column(String, nullable=True)       # linked job (optional)
+    job_title = Column(String, nullable=True)    # denormalized for display
+    job_company = Column(String, nullable=True)
+    title = Column(String, nullable=False)       # story headline
+    situation = Column(Text, nullable=True)
+    task = Column(Text, nullable=True)
+    action = Column(Text, nullable=True)
+    result = Column(Text, nullable=True)
+    skills = Column(Text, default="[]")          # JSON list of skill tags
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 def get_db():
     db = SessionLocal()
     try:

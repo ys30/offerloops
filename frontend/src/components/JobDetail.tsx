@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { EmailEvent, Job } from "../types";
-import { analyzeJob, fetchEmailEvents, generateApplicationPack, getToken, updateJobStatus } from "../api";
+import { analyzeJob, createStory, deleteStory, fetchEmailEvents, fetchStories, generateApplicationPack, getToken, updateJobStatus } from "../api";
+import type { Story } from "../api";
 import ApplicationPack from "./ApplicationPack";
 
 const STATUSES = [
@@ -52,6 +53,40 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
   );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  // STAR stories
+  const [stories, setStories] = useState<Story[]>([]);
+  const [showStoryForm, setShowStoryForm] = useState(false);
+  const [storyDraft, setStoryDraft] = useState({ title: "", situation: "", task: "", action: "", result: "", skills: "" });
+  const [savingStory, setSavingStory] = useState(false);
+
+  useEffect(() => {
+    if (getToken()) fetchStories(job.id).then(setStories).catch(() => null);
+  }, [job.id]);
+
+  async function handleSaveStory() {
+    setSavingStory(true);
+    try {
+      const s = await createStory({
+        job_id: job.id,
+        title: storyDraft.title,
+        situation: storyDraft.situation,
+        task: storyDraft.task,
+        action: storyDraft.action,
+        result: storyDraft.result,
+        skills: storyDraft.skills.split(",").map(s => s.trim()).filter(Boolean),
+      });
+      setStories(prev => [s, ...prev]);
+      setStoryDraft({ title: "", situation: "", task: "", action: "", result: "", skills: "" });
+      setShowStoryForm(false);
+    } catch { /* ignore */ }
+    finally { setSavingStory(false); }
+  }
+
+  async function handleDeleteStory(id: string) {
+    await deleteStory(id);
+    setStories(prev => prev.filter(s => s.id !== id));
+  }
 
   async function persist(overrides: { status?: string; notes?: string; appliedDate?: string } = {}) {
     const s = overrides.status ?? status;
@@ -342,6 +377,73 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
             result={pack as unknown as Parameters<typeof ApplicationPack>[0]["result"]}
             onClose={() => setPack(null)}
           />
+        )}
+
+        {/* STAR Story Bank */}
+        {getToken() && (
+          <section style={{ marginTop: 24, padding: 16, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "#1e293b" }}>📖 STAR Stories ({stories.length})</div>
+              <button onClick={() => setShowStoryForm(v => !v)} style={btnStyle("#6366f1", "#fff")}>
+                {showStoryForm ? "Cancel" : "+ Add Story"}
+              </button>
+            </div>
+
+            {showStoryForm && (
+              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: 14, marginBottom: 14 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: "#374151", marginBottom: 10 }}>New STAR Story</div>
+                {[
+                  { key: "title", label: "Story Title", placeholder: "e.g. Led cross-team data pipeline migration" },
+                  { key: "situation", label: "Situation", placeholder: "What was the context?" },
+                  { key: "task", label: "Task", placeholder: "What were you responsible for?" },
+                  { key: "action", label: "Action", placeholder: "What did you do specifically?" },
+                  { key: "result", label: "Result", placeholder: "What was the outcome? Include metrics if possible." },
+                  { key: "skills", label: "Skills (comma-separated)", placeholder: "Python, SQL, stakeholder management" },
+                ].map(({ key, label, placeholder }) => (
+                  <div key={key} style={{ marginBottom: 10 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 3 }}>{label}</label>
+                    <textarea
+                      rows={key === "title" || key === "skills" ? 1 : 3}
+                      placeholder={placeholder}
+                      value={storyDraft[key as keyof typeof storyDraft]}
+                      onChange={e => setStoryDraft(d => ({ ...d, [key]: e.target.value }))}
+                      style={textareaStyle}
+                    />
+                  </div>
+                ))}
+                <button onClick={handleSaveStory} disabled={!storyDraft.title || savingStory} style={btnStyle("#6366f1", "#fff")}>
+                  {savingStory ? "Saving…" : "Save Story"}
+                </button>
+              </div>
+            )}
+
+            {stories.length === 0 && !showStoryForm && (
+              <div style={{ fontSize: 13, color: "#94a3b8" }}>No stories yet. Add a STAR story to prepare for interviews.</div>
+            )}
+            {stories.map(s => (
+              <div key={s.id} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, marginBottom: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: "#1e293b" }}>{s.title}</div>
+                  <button onClick={() => handleDeleteStory(s.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 16 }}>×</button>
+                </div>
+                {s.skills.length > 0 && (
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", margin: "6px 0" }}>
+                    {s.skills.map(sk => (
+                      <span key={sk} style={{ fontSize: 10, background: "#ede9fe", color: "#6d28d9", borderRadius: 99, padding: "2px 8px", fontWeight: 600 }}>{sk}</span>
+                    ))}
+                  </div>
+                )}
+                {[["Situation", s.situation], ["Task", s.task], ["Action", s.action], ["Result", s.result]].map(([label, text]) =>
+                  text ? (
+                    <div key={label as string} style={{ fontSize: 12, marginTop: 6 }}>
+                      <span style={{ fontWeight: 700, color: "#6366f1" }}>{label}: </span>
+                      <span style={{ color: "#374151" }}>{text}</span>
+                    </div>
+                  ) : null
+                )}
+              </div>
+            ))}
+          </section>
         )}
       </div>
     </div>

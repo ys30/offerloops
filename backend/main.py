@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 
 from fastapi import UploadFile, File
-from .database import EmailEventRow, GmailTokenRow, JobRow, ProfileRow, SessionLocal, get_db, init_db
+from .database import EmailEventRow, GmailTokenRow, JobRow, ProfileRow, StoryRow, SessionLocal, get_db, init_db
 from .auth import (
     apply_new_password, consume_reset_token, create_reset_token, create_token,
     create_user, decode_token, get_user_by_email, get_user_by_id,
@@ -398,6 +398,95 @@ def get_patterns(user_id: str = Depends(_require_user), db: Session = Depends(ge
         "by_score_band": sorted(to_list(band_stats), key=lambda x: x["name"]),
         "total": len(rows),
     }
+
+
+# ── STAR Story Bank ──────────────────────────────────────────────────
+
+class StoryIn(BaseModel):
+    title: str
+    job_id: Optional[str] = None
+    situation: Optional[str] = None
+    task: Optional[str] = None
+    action: Optional[str] = None
+    result: Optional[str] = None
+    skills: list[str] = []
+
+class StoryOut(BaseModel):
+    id: str
+    user_id: str
+    job_id: Optional[str] = None
+    job_title: Optional[str] = None
+    job_company: Optional[str] = None
+    title: str
+    situation: Optional[str] = None
+    task: Optional[str] = None
+    action: Optional[str] = None
+    result: Optional[str] = None
+    skills: list[str] = []
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+def _story_out(row: StoryRow) -> dict:
+    import json as _j
+    return {
+        "id": row.id, "user_id": row.user_id,
+        "job_id": row.job_id, "job_title": row.job_title, "job_company": row.job_company,
+        "title": row.title,
+        "situation": row.situation, "task": row.task, "action": row.action, "result": row.result,
+        "skills": _j.loads(row.skills or "[]"),
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
+
+@app.get("/api/stories", tags=["stories"])
+def list_stories(job_id: Optional[str] = Query(None), user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    q = db.query(StoryRow).filter(StoryRow.user_id == user_id)
+    if job_id:
+        q = q.filter(StoryRow.job_id == job_id)
+    return [_story_out(r) for r in q.order_by(StoryRow.updated_at.desc()).all()]
+
+@app.post("/api/stories", tags=["stories"])
+def create_story(payload: StoryIn, user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    import json as _j, uuid as _u
+    job_title, job_company = None, None
+    if payload.job_id:
+        row = db.get(JobRow, payload.job_id)
+        if row:
+            job_title, job_company = row.title, row.company
+    story = StoryRow(
+        id=str(_u.uuid4()), user_id=user_id,
+        job_id=payload.job_id, job_title=job_title, job_company=job_company,
+        title=payload.title, situation=payload.situation, task=payload.task,
+        action=payload.action, result=payload.result,
+        skills=_j.dumps(payload.skills),
+    )
+    db.add(story)
+    db.commit()
+    return _story_out(story)
+
+@app.patch("/api/stories/{story_id}", tags=["stories"])
+def update_story(story_id: str, payload: StoryIn, user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    import json as _j
+    row = db.get(StoryRow, story_id)
+    if not row or row.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Story not found")
+    row.title = payload.title
+    if payload.situation is not None: row.situation = payload.situation
+    if payload.task is not None: row.task = payload.task
+    if payload.action is not None: row.action = payload.action
+    if payload.result is not None: row.result = payload.result
+    row.skills = _j.dumps(payload.skills)
+    db.commit()
+    return _story_out(row)
+
+@app.delete("/api/stories/{story_id}", tags=["stories"])
+def delete_story(story_id: str, user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    row = db.get(StoryRow, story_id)
+    if not row or row.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Story not found")
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
 
 
 # ── Ingestion ────────────────────────────────────────────────────────
