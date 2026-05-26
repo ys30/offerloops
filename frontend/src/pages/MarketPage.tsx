@@ -217,31 +217,37 @@ export default function MarketPage({ onBack }: { onBack?: () => void }) {
       {/* Industry breakdown — full width */}
       {data.industry && data.industry.length > 0 && (
         <div style={{ ...card, marginBottom: 16 }}>
-          <div style={sectionTitle}>Industry / Sector Breakdown</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "6px 24px" }}>
-            {data.industry.map(ind => (
-              <div key={ind.industry}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 2 }}>
-                  <span style={{ fontWeight: 600, color: "#334155" }}>{ind.industry}</span>
-                  <span style={{ color: "#64748b", display: "flex", gap: 10 }}>
-                    <span style={{ color: "#2563eb", fontWeight: 600 }}>{ind.total.toLocaleString()}</span>
-                    {ind.last_24h > 0 && (
-                      <span style={{ color: "#16a34a", fontSize: 11 }}>+{ind.last_24h} 24h</span>
-                    )}
-                    {ind.last_7d > 0 && (
-                      <span style={{ color: "#7c3aed", fontSize: 11 }}>+{ind.last_7d} 7d</span>
-                    )}
-                  </span>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 14 }}>
+            <div style={sectionTitle}>Industry / Sector Breakdown</div>
+            <span style={{ fontSize: 11, color: "#94a3b8" }}>trend = this 7d vs prior 7d</span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "8px 24px" }}>
+            {data.industry.map((ind: { industry: string; total: number; last_24h: number; last_7d: number; prev_7d?: number; trend_pct?: number }) => {
+              const trend = ind.trend_pct ?? 0;
+              const trendColor = trend > 10 ? "#16a34a" : trend < -10 ? "#dc2626" : "#94a3b8";
+              const trendIcon = trend > 10 ? "↑" : trend < -10 ? "↓" : "→";
+              return (
+                <div key={ind.industry}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, marginBottom: 3 }}>
+                    <span style={{ fontWeight: 600, color: "#334155" }}>{ind.industry}</span>
+                    <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <span style={{ color: "#2563eb", fontWeight: 700 }}>{ind.total.toLocaleString()}</span>
+                      {ind.last_24h > 0 && <span style={{ color: "#16a34a", fontSize: 10 }}>+{ind.last_24h} 24h</span>}
+                      <span style={{ color: trendColor, fontWeight: 700, fontSize: 11 }}>
+                        {trendIcon} {Math.abs(trend)}%
+                      </span>
+                    </span>
+                  </div>
+                  <div style={{ background: "#f1f5f9", borderRadius: 4, height: 6, overflow: "hidden" }}>
+                    <div style={{
+                      height: "100%", borderRadius: 4,
+                      background: "linear-gradient(90deg, #2563eb, #7c3aed)",
+                      width: `${(ind.total / maxIndustry) * 100}%`,
+                    }} />
+                  </div>
                 </div>
-                <div style={{ background: "#f1f5f9", borderRadius: 4, height: 5, overflow: "hidden" }}>
-                  <div style={{
-                    height: "100%", borderRadius: 4,
-                    background: "linear-gradient(90deg, #2563eb, #7c3aed)",
-                    width: `${(ind.total / maxIndustry) * 100}%`,
-                  }} />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

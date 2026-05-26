@@ -1515,6 +1515,8 @@ def list_industries(db: Session = Depends(get_db)):
     counts_24h: dict[str, int] = {k: 0 for k in INDUSTRY_MAP}
     counts_7d:  dict[str, int] = {k: 0 for k in INDUSTRY_MAP}
     from .industries import TAG_TO_INDUSTRY
+    cutoff_14d = datetime.utcnow() - __import__("datetime").timedelta(days=14)
+    counts_prev7d: dict[str, int] = {k: 0 for k in INDUSTRY_MAP}
     for raw, pd in rows:
         try:
             tags = _json.loads(raw)
@@ -1530,9 +1532,26 @@ def list_industries(db: Session = Depends(get_db)):
                     counts_24h[ind] += 1
                 if pd and pd >= cutoff_7d:
                     counts_7d[ind] += 1
-    return [
-        {"industry": k, "total": counts[k], "last_24h": counts_24h[k], "last_7d": counts_7d[k]}
-        for k in INDUSTRY_MAP if counts[k] > 0
+                elif pd and pd >= cutoff_14d:
+                    counts_prev7d[ind] += 1
+    result = []
+    for k in INDUSTRY_MAP:
+        if counts[k] == 0:
+            continue
+        curr = counts_7d[k]
+        prev = counts_prev7d[k]
+        if prev > 0:
+            trend_pct = round((curr - prev) / prev * 100)
+        elif curr > 0:
+            trend_pct = 100
+        else:
+            trend_pct = 0
+        result.append({
+            "industry": k, "total": counts[k],
+            "last_24h": counts_24h[k], "last_7d": curr,
+            "prev_7d": prev, "trend_pct": trend_pct,
+        })
+    return result
     ]
 
 
