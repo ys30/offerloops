@@ -348,7 +348,7 @@ async def analyze_job(payload: AnalyzeRequest, user_id: str = Depends(_require_u
     from .ai import analyze_job_fit
 
     row = db.get(JobRow, payload.job_id)
-    if not row or row.user_id != user_id:
+    if not row or (row.user_id is not None and row.user_id != user_id):
         raise HTTPException(status_code=404, detail="Job not found")
 
     resume_text = payload.resume_text
@@ -394,7 +394,7 @@ async def generate_application_pack(
     from .ai import tailor_resume, generate_cover_letter, _pick_provider
 
     row = db.get(JobRow, payload.job_id)
-    if not row or row.user_id != user_id:
+    if not row or (row.user_id is not None and row.user_id != user_id):
         raise HTTPException(status_code=404, detail="Job not found")
 
     resume_text = payload.resume_text
