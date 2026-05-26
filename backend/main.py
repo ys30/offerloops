@@ -93,6 +93,7 @@ async def _auto_refresh_loop():
 @app.on_event("startup")
 def on_startup():
     init_db()
+    asyncio.ensure_future(_auto_refresh_loop())
 
 
 # ── Auth helpers ──────────────────────────────────────────────────────
