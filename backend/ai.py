@@ -134,6 +134,12 @@ async def _call_openai_compat(
             if attempt == 3:
                 raise
             await asyncio.sleep(2 ** attempt * 5)  # 5s, 10s, 20s
+        except Exception as e:
+            err = str(e)
+            # Strip HTML from error messages for readability
+            if "<!DOCTYPE" in err or "<html" in err.lower():
+                raise RuntimeError(f"API returned HTML error page (status may be 401/403). Check your API key. Provider base_url={base_url}")
+            raise
 
 
 async def _call_gemini(system: str, user: str, model: str, api_key: str, max_tokens: int = 1024) -> str:
