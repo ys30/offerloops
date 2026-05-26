@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { fetchDashboard } from "../api";
+import { fetchDashboard, fetchPatterns } from "../api";
+import type { PatternRow } from "../api";
 
 interface Funnel { interested: number; applied: number; responded: number; interview: number; offer: number; rejected: number }
 interface WeekPoint { week: string; count: number }
@@ -35,12 +36,15 @@ export default function DashboardPage({ onSelectJob }: { onSelectJob: (id: strin
   const [error, setError] = useState("");
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [patterns, setPatterns] = useState<{ by_industry: PatternRow[]; by_source: PatternRow[]; by_score_band: PatternRow[]; total: number } | null>(null);
+  const [patternTab, setPatternTab] = useState<"industry" | "source" | "score">("industry");
 
   useEffect(() => {
     fetchDashboard()
       .then(d => setData(d as unknown as DashData))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
+    fetchPatterns().then(setPatterns).catch(() => null);
   }, []);
 
   if (loading) return <div style={{ textAlign: "center", padding: 60, color: "#94a3b8" }}>Loading dashboard…</div>;
@@ -288,6 +292,60 @@ export default function DashboardPage({ onSelectJob }: { onSelectJob: (id: strin
           )}
         </div>
       </div>
+
+      {/* ── Pattern Analysis ─────────────────────────────────── */}
+      {patterns && patterns.total > 0 && (
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "18px 20px", marginBottom: 16 }}>
+          <h2 style={sectionTitle}>📊 Rejection Pattern Analysis</h2>
+          <p style={{ fontSize: 12, color: "#94a3b8", margin: "0 0 14px" }}>
+            Based on {patterns.total} tracked applications — which categories get responses vs. rejections.
+          </p>
+          {/* Tabs */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+            {(["industry", "source", "score"] as const).map(tab => (
+              <button key={tab} onClick={() => setPatternTab(tab)} style={{
+                padding: "5px 14px", fontSize: 12, fontWeight: 600, borderRadius: 99,
+                border: "none", cursor: "pointer",
+                background: patternTab === tab ? "#2563eb" : "#f1f5f9",
+                color: patternTab === tab ? "#fff" : "#64748b",
+              }}>
+                {tab === "industry" ? "By Industry" : tab === "source" ? "By Source" : "By AI Score"}
+              </button>
+            ))}
+          </div>
+          {/* Rows */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {(patternTab === "industry" ? patterns.by_industry :
+              patternTab === "source" ? patterns.by_source : patterns.by_score_band
+            ).filter(r => r.total >= 1).slice(0, 10).map(row => (
+              <div key={row.name} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 160, fontSize: 12, fontWeight: 600, color: "#374151", flexShrink: 0,
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {row.name}
+                </div>
+                <div style={{ flex: 1, height: 20, background: "#f1f5f9", borderRadius: 99, overflow: "hidden", position: "relative" }}>
+                  <div style={{
+                    position: "absolute", left: 0, top: 0, bottom: 0,
+                    width: `${row.positive_rate}%`,
+                    background: row.positive_rate >= 30 ? "#16a34a" : row.positive_rate >= 10 ? "#f59e0b" : "#dc2626",
+                    borderRadius: 99, transition: "width 0.4s",
+                    minWidth: row.positive > 0 ? 4 : 0,
+                  }} />
+                </div>
+                <div style={{ display: "flex", gap: 6, fontSize: 11, flexShrink: 0 }}>
+                  <span style={{ color: "#16a34a", fontWeight: 700 }}>✓{row.positive}</span>
+                  <span style={{ color: "#dc2626", fontWeight: 700 }}>✗{row.negative}</span>
+                  <span style={{ color: "#94a3b8" }}>{row.total} total</span>
+                  <span style={{ color: "#64748b", fontWeight: 700 }}>{row.positive_rate}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 10, fontSize: 11, color: "#94a3b8" }}>
+            Green bar = % of applications that got a positive response (phone screen, interview, or offer)
+          </div>
+        </div>
+      )}
 
       {/* ── Compensation Intelligence ─────────────────────────── */}
       <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "18px 20px" }}>

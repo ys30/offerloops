@@ -309,6 +309,97 @@ def get_followups(user_id: str = Depends(_require_user), db: Session = Depends(g
     return due
 
 
+# ── Pattern analysis ─────────────────────────────────────────────────
+
+@app.get("/api/patterns", tags=["tracker"])
+def get_patterns(user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    """Analyse which industries/sources/score ranges lead to positive vs negative outcomes."""
+    import json as _json
+    from .industries import INDUSTRY_MAP
+
+    rows = db.query(JobRow).filter(
+        JobRow.user_id == user_id,
+        JobRow.status.in_(["applied", "phone_screen", "interview", "offer", "rejected", "withdrawn"]),
+    ).all()
+
+    if not rows:
+        return {"by_industry": [], "by_source": [], "by_score_band": [], "total": 0}
+
+    positive = {"phone_screen", "interview", "offer"}
+    negative = {"rejected", "withdrawn"}
+
+    def outcome(status):
+        if status in positive: return "positive"
+        if status in negative: return "negative"
+        return "pending"
+
+    # Build reverse tag→industry map
+    tag_to_industry: dict[str, str] = {}
+    for ind, tags in INDUSTRY_MAP.items():
+        for t in tags:
+            tag_to_industry[t] = ind
+
+    def row_industry(row) -> str:
+        try:
+            tags = _json.loads(row.tags or "[]")
+            for t in tags:
+                if t in tag_to_industry:
+                    return tag_to_industry[t]
+        except Exception:
+            pass
+        return "Other"
+
+    # Aggregate by industry
+    ind_stats: dict[str, dict] = {}
+    src_stats: dict[str, dict] = {}
+    band_stats: dict[str, dict] = {}
+
+    for row in rows:
+        oc = outcome(row.status or "")
+        ind = row_industry(row)
+        src = row.source or "other"
+
+        score = row.ai_score
+        if score is None:
+            band = "Unscored"
+        elif score >= 80:
+            band = "80–100 (Strong)"
+        elif score >= 60:
+            band = "60–79 (Good)"
+        elif score >= 40:
+            band = "40–59 (Fair)"
+        else:
+            band = "< 40 (Weak)"
+
+        for bucket, key in [(ind_stats, ind), (src_stats, src), (band_stats, band)]:
+            if key not in bucket:
+                bucket[key] = {"total": 0, "positive": 0, "negative": 0, "pending": 0}
+            bucket[key]["total"] += 1
+            bucket[key][oc] += 1
+
+    def to_list(d: dict) -> list:
+        result = []
+        for name, s in d.items():
+            total = s["total"]
+            pos_rate = round(s["positive"] / total * 100) if total else 0
+            result.append({
+                "name": name,
+                "total": total,
+                "positive": s["positive"],
+                "negative": s["negative"],
+                "pending": s["pending"],
+                "positive_rate": pos_rate,
+            })
+        return sorted(result, key=lambda x: x["total"], reverse=True)
+
+    return {
+        "by_industry": to_list(ind_stats),
+        "by_source": to_list(src_stats),
+        "by_score_band": sorted(to_list(band_stats), key=lambda x: x["name"]),
+        "total": len(rows),
+    }
+
+
 # ── Ingestion ────────────────────────────────────────────────────────
 
 

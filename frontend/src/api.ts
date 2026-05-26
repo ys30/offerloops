@@ -156,6 +156,26 @@ export async function fetchFollowups(): Promise<(Job & { followup_due_days: numb
   return res.json();
 }
 
+export async function fetchPatterns(): Promise<{
+  by_industry: PatternRow[];
+  by_source: PatternRow[];
+  by_score_band: PatternRow[];
+  total: number;
+}> {
+  const res = await fetch(`${BASE}/patterns`, { headers: authHeaders() });
+  if (!res.ok) return { by_industry: [], by_source: [], by_score_band: [], total: 0 };
+  return res.json();
+}
+
+export interface PatternRow {
+  name: string;
+  total: number;
+  positive: number;
+  negative: number;
+  pending: number;
+  positive_rate: number;
+}
+
 export async function fetchStats(): Promise<Stats> {
   const res = await fetch(`${BASE}/stats`, { headers: authHeaders() });
   if (!res.ok) throw new Error(await res.text());
