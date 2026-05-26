@@ -469,7 +469,7 @@ async def score_all_jobs(
     if not profile or not profile.resume_text:
         raise HTTPException(status_code=422, detail="No profile resume saved. Upload your resume on the Profile page first.")
 
-    q = db.query(JobRow).filter(JobRow.user_id == user_id)
+    q = db.query(JobRow).filter(or_(JobRow.user_id == user_id, JobRow.user_id.is_(None)))
     if not rescore:
         q = q.filter(JobRow.ai_score.is_(None))
     if days is not None:
