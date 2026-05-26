@@ -1,14 +1,21 @@
 import { useEffect, useState, useCallback } from "react";
-import { fetchJobs, fetchStats } from "./api";
-import type { Job, Stats } from "./types";
+import { fetchJobs, fetchStats, fetchMe, getToken } from "./api";
+import IndustryMultiSelect from "./components/IndustryMultiSelect";
+import type { Job, Stats, User } from "./types";
 import JobCard from "./components/JobCard";
 import JobDetail from "./components/JobDetail";
 import AddJobForm from "./components/AddJobForm";
 import IngestPanel from "./components/IngestPanel";
 import ScoreAllPanel from "./components/ScoreAllPanel";
 import ProfilePage from "./pages/ProfilePage";
+import AuthPage from "./pages/AuthPage";
+import TrackerPage from "./pages/TrackerPage";
+import DashboardPage from "./pages/DashboardPage";
+import MarketPage from "./pages/MarketPage";
 
 export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -16,22 +23,87 @@ export default function App() {
   const [showIngest, setShowIngest] = useState(false);
   const [showScoreAll, setShowScoreAll] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showTracker, setShowTracker] = useState(false);
+  const [showDashboard, setShowDashboard] = useState(false);
+  const [showMarket, setShowMarket] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [resetToken, setResetToken] = useState<string | null>(null);
+
+  // Restore session — also handle OAuth (?token=) and password reset (?reset_token=) redirects
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const redirectToken = params.get("token");
+    const rt = params.get("reset_token");
+    if (redirectToken) {
+      localStorage.setItem("ol_token", redirectToken);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    if (rt) {
+      setResetToken(rt);
+      setShowAuthModal(true);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    const authError = params.get("auth_error");
+    if (authError) window.history.replaceState({}, "", window.location.pathname);
+    const gmailConnected = params.get("gmail_connected");
+    const gmailError = params.get("gmail_error");
+    if (gmailConnected || gmailError) window.history.replaceState({}, "", window.location.pathname);
+    if (gmailConnected) {
+      // Redirect user to their profile so they can see the connected state + sync
+      setTimeout(() => setShowProfile(true), 100);
+    }
+
+    if (getToken()) {
+      fetchMe().then(setUser).catch(() => localStorage.removeItem("ol_token")).finally(() => setAuthChecked(true));
+    } else {
+      setAuthChecked(true);
+    }
+  }, []);
+
+  function handleAuth(_token: string, u: User) {
+    setUser(u);
+    setShowAuthModal(false);
+    setPage(1);
+    loadJobs(1);
+    loadStats();
+  }
+
+  function handleLogout() {
+    localStorage.removeItem("ol_token");
+    setUser(null);
+  }
 
   // Search / filter state
   const [q, setQ] = useState("");
   const [remote, setRemote] = useState<boolean | undefined>();
   const [source, setSource] = useState("");
+  const [selectedIndustries, setSelectedIndustries] = useState<Set<string>>(new Set());
+  const [sort, setSort] = useState("date");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const PAGE_SIZE = 50;
 
-  const loadJobs = useCallback(async () => {
+  const loadJobs = useCallback(async (targetPage = page, overrideSort?: string) => {
     setLoading(true);
     try {
-      const data = await fetchJobs({ q: q || undefined, remote, source: source || undefined, limit: 100 });
+      const { jobs: data, total: t } = await fetchJobs({
+        q: q || undefined,
+        remote,
+        source: source || undefined,
+        industries: selectedIndustries.size > 0 ? Array.from(selectedIndustries).join(",") : undefined,
+        sort: overrideSort ?? sort,
+        limit: PAGE_SIZE,
+        offset: (targetPage - 1) * PAGE_SIZE,
+      });
       setJobs(data);
-    } finally {
+      setTotal(t);
+    } catch { /* ignore */ }
+    finally {
       setLoading(false);
     }
-  }, [q, remote, source]);
+  }, [q, remote, source, selectedIndustries, sort, page]);
 
   const loadStats = useCallback(async () => {
     try {
@@ -41,18 +113,69 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    loadJobs();
+    if (!authChecked) return;
+    loadJobs(page);
     loadStats();
-  }, [loadJobs, loadStats]);
+  }, [loadJobs, loadStats, page, authChecked]);
 
   const selected = jobs.find(j => j.id === selectedId);
+
+  if (!authChecked) return null;
+
+  // Shared header props — same nav on every page
+  const headerProps = {
+    stats, user,
+    onProfile:   () => { setShowProfile(true); setShowDashboard(false); setShowMarket(false); setShowTracker(false); },
+    onDashboard: () => { setShowDashboard(true); setShowProfile(false); setShowMarket(false); setShowTracker(false); },
+    onMarket:    () => { setShowMarket(true); setShowProfile(false); setShowDashboard(false); setShowTracker(false); },
+    onLogout:    handleLogout,
+    onSignIn:    () => setShowAuthModal(true),
+  };
 
   if (showProfile) {
     return (
       <div style={pageStyle}>
-        <Header stats={stats} onProfile={() => setShowProfile(false)} profileActive />
+        {showAuthModal && <AuthPage onAuth={handleAuth} onClose={() => { setShowAuthModal(false); setResetToken(null); }} resetToken={resetToken} />}
+        <Header {...headerProps} profileActive />
         <main style={mainStyle}>
           <ProfilePage onBack={() => setShowProfile(false)} />
+        </main>
+      </div>
+    );
+  }
+
+  if (showTracker) {
+    return (
+      <div style={pageStyle}>
+        {showAuthModal && <AuthPage onAuth={handleAuth} onClose={() => { setShowAuthModal(false); setResetToken(null); }} resetToken={resetToken} />}
+        <Header {...headerProps} />
+        <main style={{ ...mainStyle, maxWidth: 1200 }}>
+          <button onClick={() => setShowTracker(false)} style={{ marginBottom: 16, padding: "6px 14px", background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>← Back to Jobs</button>
+          <TrackerPage user={user} onSelectJob={id => { setShowTracker(false); setSelectedId(id); }} />
+        </main>
+      </div>
+    );
+  }
+
+  if (showDashboard) {
+    return (
+      <div style={pageStyle}>
+        {showAuthModal && <AuthPage onAuth={handleAuth} onClose={() => { setShowAuthModal(false); setResetToken(null); }} resetToken={resetToken} />}
+        <Header {...headerProps} dashboardActive />
+        <main style={{ ...mainStyle, maxWidth: 1140 }}>
+          <DashboardPage onSelectJob={id => { setShowDashboard(false); setSelectedId(id); }} />
+        </main>
+      </div>
+    );
+  }
+
+  if (showMarket) {
+    return (
+      <div style={pageStyle}>
+        {showAuthModal && <AuthPage onAuth={handleAuth} onClose={() => { setShowAuthModal(false); setResetToken(null); }} resetToken={resetToken} />}
+        <Header {...headerProps} marketActive />
+        <main style={{ ...mainStyle, maxWidth: 1140 }}>
+          <MarketPage onBack={() => setShowMarket(false)} />
         </main>
       </div>
     );
@@ -61,7 +184,8 @@ export default function App() {
   if (selected) {
     return (
       <div style={pageStyle}>
-        <Header stats={stats} onProfile={() => setShowProfile(true)} />
+        {showAuthModal && <AuthPage onAuth={handleAuth} onClose={() => { setShowAuthModal(false); setResetToken(null); }} resetToken={resetToken} />}
+        <Header {...headerProps} />
         <main style={mainStyle}>
           <JobDetail
             job={selected}
@@ -79,7 +203,10 @@ export default function App() {
 
   return (
     <div style={pageStyle}>
-      <Header stats={stats} onProfile={() => setShowProfile(true)} />
+      {showAuthModal && (
+        <AuthPage onAuth={handleAuth} onClose={() => setShowAuthModal(false)} />
+      )}
+      <Header {...headerProps} />
       <main style={mainStyle}>
         {/* Search bar */}
         <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
@@ -88,35 +215,55 @@ export default function App() {
             placeholder="Search jobs, companies, keywords…"
             value={q}
             onChange={e => setQ(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && loadJobs()}
+            onKeyDown={e => { if (e.key === "Enter") { setPage(1); loadJobs(1); } }}
           />
           <select
             style={selectStyle}
             value={source}
-            onChange={e => setSource(e.target.value)}
+            onChange={e => { setSource(e.target.value); setPage(1); }}
           >
             <option value="">All sources</option>
             <option value="usajobs">USAJobs</option>
             <option value="greenhouse">Greenhouse</option>
             <option value="lever">Lever</option>
+            <option value="ashby">Ashby</option>
+            <option value="80k_hours">80,000 Hours</option>
+            <option value="climatebase">Climatebase</option>
             <option value="manual">Manual</option>
           </select>
           <select
             style={selectStyle}
             value={remote === undefined ? "" : String(remote)}
-            onChange={e => setRemote(e.target.value === "" ? undefined : e.target.value === "true")}
+            onChange={e => { setRemote(e.target.value === "" ? undefined : e.target.value === "true"); setPage(1); }}
           >
             <option value="">Any location</option>
             <option value="true">Remote only</option>
             <option value="false">On-site</option>
           </select>
-          <button onClick={loadJobs} style={primaryBtn}>Search</button>
+          <div style={{ minWidth: 180 }}>
+            <IndustryMultiSelect
+              selected={selectedIndustries}
+              onChange={next => { setSelectedIndustries(next); setPage(1); }}
+            />
+          </div>
+          <select
+            style={selectStyle}
+            value={sort}
+            onChange={e => { setSort(e.target.value); setPage(1); }}
+          >
+            <option value="date">Newest first</option>
+            <option value="score">Best match first</option>
+          </select>
+          <button onClick={() => { setPage(1); loadJobs(1); }} style={primaryBtn}>Search</button>
           <button onClick={() => setShowAdd(true)} style={secondaryBtn}>+ Add Job</button>
           <button onClick={() => setShowIngest(v => !v)} style={secondaryBtn}>
             {showIngest ? "Hide Import" : "Import from Source"}
           </button>
           <button onClick={() => setShowScoreAll(v => !v)} style={secondaryBtn}>
             {showScoreAll ? "Hide Score All" : "⚡ Score All"}
+          </button>
+          <button onClick={() => setShowTracker(true)} style={secondaryBtn}>
+            📋 Tracker
           </button>
         </div>
 
@@ -128,7 +275,9 @@ export default function App() {
 
         {showScoreAll && (
           <ScoreAllPanel
-            onDone={() => { loadJobs(); loadStats(); }}
+            user={user}
+            onSignIn={() => setShowAuthModal(true)}
+            onDone={() => { setSort("score"); setPage(1); loadJobs(1, "score"); loadStats(); }}
             onClose={() => setShowScoreAll(false)}
           />
         )}
@@ -144,11 +293,32 @@ export default function App() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 4 }}>
-              {jobs.length} job{jobs.length !== 1 ? "s" : ""}
+              {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} of {total} job{total !== 1 ? "s" : ""}
             </div>
             {jobs.map(j => (
               <JobCard key={j.id} job={j} onSelect={setSelectedId} />
             ))}
+            {total > PAGE_SIZE && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, padding: "16px 0" }}>
+                <button
+                  onClick={() => setPage(p => p - 1)}
+                  disabled={page === 1}
+                  style={{ ...secondaryBtn, opacity: page === 1 ? 0.4 : 1, cursor: page === 1 ? "default" : "pointer" }}
+                >
+                  ← Prev
+                </button>
+                <span style={{ fontSize: 13, color: "#64748b" }}>
+                  Page {page} of {Math.ceil(total / PAGE_SIZE)}
+                </span>
+                <button
+                  onClick={() => setPage(p => p + 1)}
+                  disabled={page * PAGE_SIZE >= total}
+                  style={{ ...secondaryBtn, opacity: page * PAGE_SIZE >= total ? 0.4 : 1, cursor: page * PAGE_SIZE >= total ? "default" : "pointer" }}
+                >
+                  Next →
+                </button>
+              </div>
+            )}
           </div>
         )}
       </main>
@@ -163,38 +333,64 @@ export default function App() {
   );
 }
 
-function Header({ stats, onProfile, profileActive }: { stats: Stats | null; onProfile: () => void; profileActive?: boolean }) {
+function Header({ stats, user, onProfile, onLogout, onSignIn, onDashboard, onMarket, profileActive, dashboardActive, marketActive }: {
+  stats: Stats | null;
+  user: User | null;
+  onProfile: () => void;
+  onLogout: () => void;
+  onSignIn: () => void;
+  onDashboard: () => void;
+  onMarket: () => void;
+  profileActive?: boolean;
+  dashboardActive?: boolean;
+  marketActive?: boolean;
+}) {
+  const navBtn = (active?: boolean): React.CSSProperties => ({
+    padding: "5px 14px", fontSize: 12, fontWeight: 600, borderRadius: 6, cursor: "pointer",
+    background: active ? "#fff" : "rgba(255,255,255,0.12)",
+    color: active ? "#1e293b" : "#e2e8f0",
+    border: "1px solid rgba(255,255,255,0.2)",
+  });
   return (
     <header style={{
       background: "#1e293b", color: "#fff", padding: "12px 24px",
       display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16,
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-        <div>
-          <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: -0.5 }}>FlowHire</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ marginRight: 6 }}>
+          <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: -0.5 }}>OfferLoops</span>
           <span style={{ marginLeft: 8, fontSize: 11, color: "#94a3b8", fontWeight: 400 }}>
             open API · multi-model AI
           </span>
         </div>
-        <button
-          onClick={onProfile}
-          style={{
-            padding: "5px 14px", fontSize: 12, fontWeight: 600, borderRadius: 6, cursor: "pointer",
-            background: profileActive ? "#fff" : "rgba(255,255,255,0.12)",
-            color: profileActive ? "#1e293b" : "#e2e8f0",
-            border: "1px solid rgba(255,255,255,0.2)",
-          }}
-        >
-          👤 My Profile
-        </button>
+        <button onClick={onProfile} style={navBtn(profileActive)}>👤 My Profile</button>
+        <button onClick={onDashboard} style={navBtn(dashboardActive)}>📊 Dashboard</button>
+        <button onClick={onMarket} style={navBtn(marketActive)}>🌐 Market</button>
       </div>
-      {stats && (
-        <div style={{ display: "flex", gap: 16, fontSize: 12, color: "#94a3b8" }}>
-          <span><b style={{ color: "#fff" }}>{stats.total_jobs}</b> jobs</span>
-          <span><b style={{ color: "#fff" }}>{stats.remote_jobs}</b> remote</span>
-          <span><b style={{ color: "#fff" }}>{stats.ai_scored}</b> AI-scored</span>
-        </div>
-      )}
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        {stats && (
+          <div style={{ display: "flex", gap: 16, fontSize: 12, color: "#94a3b8" }}>
+            <span><b style={{ color: "#fff" }}>{stats.total_jobs}</b> jobs</span>
+            <span><b style={{ color: "#fff" }}>{stats.remote_jobs}</b> remote</span>
+            <span><b style={{ color: "#fff" }}>{stats.ai_scored}</b> AI-scored</span>
+          </div>
+        )}
+        {user ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12 }}>
+            <span style={{ color: "#94a3b8" }}>{user.name || user.email}</span>
+            <button onClick={onLogout} style={{
+              padding: "4px 10px", fontSize: 11, fontWeight: 600, borderRadius: 5, cursor: "pointer",
+              background: "rgba(255,255,255,0.1)", color: "#e2e8f0",
+              border: "1px solid rgba(255,255,255,0.15)",
+            }}>Sign out</button>
+          </div>
+        ) : (
+          <button onClick={onSignIn} style={{
+            padding: "5px 14px", fontSize: 12, fontWeight: 600, borderRadius: 6, cursor: "pointer",
+            background: "#2563eb", color: "#fff", border: "none",
+          }}>Sign in</button>
+        )}
+      </div>
     </header>
   );
 }

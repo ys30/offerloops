@@ -13,14 +13,14 @@ from sqlalchemy.orm import Session
 from .database import ProfileRow
 
 
-def get_profile(db: Session) -> Optional[ProfileRow]:
-    return db.query(ProfileRow).order_by(ProfileRow.updated_at.desc()).first()
+def get_profile(db: Session, user_id: str = "default") -> Optional[ProfileRow]:
+    return db.get(ProfileRow, user_id)
 
 
-def upsert_profile(db: Session, **fields) -> ProfileRow:
-    row = db.query(ProfileRow).first()
+def upsert_profile(db: Session, user_id: str = "default", **fields) -> ProfileRow:
+    row = db.get(ProfileRow, user_id)
     if not row:
-        row = ProfileRow(id="default", created_at=datetime.utcnow())
+        row = ProfileRow(id=user_id, created_at=datetime.utcnow())
         db.add(row)
     for k, v in fields.items():
         if v is not None:

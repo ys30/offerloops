@@ -1,10 +1,52 @@
 import { useRef, useState } from "react";
+import { getToken } from "../api";
+import IndustryMultiSelect from "./IndustryMultiSelect";
 
 const PROVIDERS = [
   { id: "anthropic", label: "Claude Opus 4.7" },
   { id: "nvidia",    label: "NVIDIA NIM (Llama 3.3 70B)" },
   { id: "openai",    label: "GPT-4o" },
   { id: "gemini",    label: "Gemini 1.5 Pro" },
+];
+
+const US_STATES = [
+  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
+  "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+  "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+  "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+  "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC",
+];
+
+const STATE_NAMES: Record<string, string> = {
+  AL:"Alabama", AK:"Alaska", AZ:"Arizona", AR:"Arkansas", CA:"California",
+  CO:"Colorado", CT:"Connecticut", DE:"Delaware", FL:"Florida", GA:"Georgia",
+  HI:"Hawaii", ID:"Idaho", IL:"Illinois", IN:"Indiana", IA:"Iowa",
+  KS:"Kansas", KY:"Kentucky", LA:"Louisiana", ME:"Maine", MD:"Maryland",
+  MA:"Massachusetts", MI:"Michigan", MN:"Minnesota", MS:"Mississippi", MO:"Missouri",
+  MT:"Montana", NE:"Nebraska", NV:"Nevada", NH:"New Hampshire", NJ:"New Jersey",
+  NM:"New Mexico", NY:"New York", NC:"North Carolina", ND:"North Dakota", OH:"Ohio",
+  OK:"Oklahoma", OR:"Oregon", PA:"Pennsylvania", RI:"Rhode Island", SC:"South Carolina",
+  SD:"South Dakota", TN:"Tennessee", TX:"Texas", UT:"Utah", VT:"Vermont",
+  VA:"Virginia", WA:"Washington", WV:"West Virginia", WI:"Wisconsin", WY:"Wyoming", DC:"D.C.",
+};
+
+const TIME_OPTIONS = [
+  { value: "",   label: "All time" },
+  { value: "3",  label: "Last 3 days" },
+  { value: "7",  label: "Last 7 days" },
+  { value: "15", label: "Last 15 days" },
+  { value: "30", label: "Last 30 days" },
+];
+
+const SOURCES = [
+  { value: "",            label: "All sources" },
+  { value: "usajobs",     label: "USAJobs" },
+  { value: "greenhouse",  label: "Greenhouse" },
+  { value: "lever",       label: "Lever" },
+  { value: "ashby",       label: "Ashby" },
+  { value: "80k_hours",   label: "80,000 Hours" },
+  { value: "climatebase", label: "Climatebase" },
+  { value: "manual",      label: "Manual" },
 ];
 
 interface LogEntry {
@@ -15,15 +57,27 @@ interface LogEntry {
 }
 
 interface Props {
+  user?: { id: string } | null;
+  onSignIn?: () => void;
   onDone: () => void;
   onClose: () => void;
 }
 
-export default function ScoreAllPanel({ onDone, onClose }: Props) {
+export default function ScoreAllPanel({ user, onSignIn, onDone, onClose }: Props) {
   const [provider, setProvider] = useState("anthropic");
   const [apiKey, setApiKey] = useState("");
   const [rescore, setRescore] = useState(false);
-  const [recentOnly, setRecentOnly] = useState(true);
+  const [days, setDays] = useState("7");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [remoteFilter, setRemoteFilter] = useState<"" | "true" | "false">("");
+
+  // Area selection: "us" = all US, "states" = specific states
+  const [areaMode, setAreaMode] = useState<"us" | "states" | "all">("us");
+  const [selectedStates, setSelectedStates] = useState<Set<string>>(new Set());
+  const [stateDropOpen, setStateDropOpen] = useState(false);
+
+  const [selectedIndustries, setSelectedIndustries] = useState<Set<string>>(new Set());
+
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
   const [total, setTotal] = useState(0);
@@ -32,6 +86,25 @@ export default function ScoreAllPanel({ onDone, onClose }: Props) {
   const [log, setLog] = useState<LogEntry[]>([]);
   const [startError, setStartError] = useState("");
   const abortRef = useRef<AbortController | null>(null);
+
+  function toggleState(code: string) {
+    setSelectedStates(prev => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code); else next.add(code);
+      return next;
+    });
+  }
+
+  function selectAllStates() { setSelectedStates(new Set(US_STATES)); }
+  function clearStates() { setSelectedStates(new Set()); }
+
+  function areaLabel() {
+    if (areaMode === "all") return "All locations";
+    if (areaMode === "us") return "🇺🇸 United States (all)";
+    if (selectedStates.size === 0) return "Select states…";
+    if (selectedStates.size <= 4) return Array.from(selectedStates).join(", ");
+    return `${Array.from(selectedStates).slice(0, 3).join(", ")} +${selectedStates.size - 3} more`;
+  }
 
   async function start() {
     setRunning(true);
@@ -43,17 +116,28 @@ export default function ScoreAllPanel({ onDone, onClose }: Props) {
     setFailed(0);
 
     const qs = new URLSearchParams({ provider, rescore: String(rescore) });
-    if (recentOnly) qs.set("days", "7");
+    if (days) qs.set("days", days);
+    if (sourceFilter) qs.set("source", sourceFilter);
+    if (remoteFilter !== "") qs.set("remote", remoteFilter);
+    if (selectedIndustries.size > 0) qs.set("industries", Array.from(selectedIndustries).join(","));
     if (apiKey) qs.set("api_key", apiKey);
+
+    if (areaMode === "states" && selectedStates.size > 0) {
+      qs.set("states", Array.from(selectedStates).join(","));
+    } else if (areaMode === "us") {
+      qs.set("us_only", "true");
+    }
 
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
     let response: Response;
     try {
+      const token = getToken();
       response = await fetch(`/api/ai/score-all?${qs}`, {
         method: "POST",
         signal: ctrl.signal,
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
     } catch (e: unknown) {
       if ((e as Error).name === "AbortError") { setRunning(false); return; }
@@ -64,7 +148,7 @@ export default function ScoreAllPanel({ onDone, onClose }: Props) {
 
     if (!response.ok) {
       let detail = `HTTP ${response.status}`;
-      try { const body = await response.json(); detail = body.detail || detail; } catch { /* */ }
+      try { const body = await response.json(); detail = body.detail || detail; } catch { /**/ }
       setStartError(detail);
       setRunning(false);
       return;
@@ -126,17 +210,35 @@ export default function ScoreAllPanel({ onDone, onClose }: Props) {
 
   const pct = total > 0 ? Math.round(((scored + failed) / total) * 100) : 0;
 
+  if (!user) {
+    return (
+      <div style={panel}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>Score All Jobs vs. Profile Resume</span>
+          <button onClick={onClose} style={closeBtn}>✕</button>
+        </div>
+        <div style={{ padding: "16px 0", textAlign: "center" }}>
+          <div style={{ fontSize: 13, color: "#64748b", marginBottom: 12 }}>
+            Sign in to score all jobs against your resume.
+          </div>
+          <button onClick={onSignIn} style={{ ...primaryBtn, display: "inline-block" }}>
+            Sign in / Create account
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={panel}>
+      {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-        <span style={{ fontWeight: 700, fontSize: 14 }}>Score All Jobs vs. Profile Resume</span>
-        {!running && (
-          <button onClick={onClose} style={closeBtn}>✕</button>
-        )}
+        <span style={{ fontWeight: 700, fontSize: 14 }}>⚡ Score All Jobs vs. Profile Resume</span>
+        {!running && <button onClick={onClose} style={closeBtn}>✕</button>}
       </div>
 
       {/* Provider selector */}
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
         {PROVIDERS.map(p => (
           <button
             key={p.id}
@@ -148,40 +250,155 @@ export default function ScoreAllPanel({ onDone, onClose }: Props) {
               color: provider === p.id ? "#fff" : "#374151",
               opacity: running ? 0.7 : 1,
             }}
-          >
-            {p.label}
-          </button>
+          >{p.label}</button>
         ))}
       </div>
 
-      {/* API key + rescore options */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+      {/* Filter grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 1fr 1fr auto", gap: 8, marginBottom: 10, alignItems: "start" }}>
+
+        {/* Area dropdown */}
+        <div>
+          <div style={filterLabel}>Area</div>
+          <div style={{ position: "relative" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {/* Mode selector */}
+              <select
+                value={areaMode}
+                disabled={running}
+                onChange={e => { setAreaMode(e.target.value as "us" | "states" | "all"); setStateDropOpen(false); }}
+                style={sel}
+              >
+                <option value="all">All locations</option>
+                <option value="us">🇺🇸 United States (all)</option>
+                <option value="states">Specific states…</option>
+              </select>
+
+              {/* State multi-select — only shown when mode = states */}
+              {areaMode === "states" && (
+                <div style={{ position: "relative" }}>
+                  <button
+                    type="button"
+                    disabled={running}
+                    onClick={() => setStateDropOpen(v => !v)}
+                    style={{
+                      ...sel, width: "100%", textAlign: "left", cursor: running ? "default" : "pointer",
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      color: selectedStates.size === 0 ? "#94a3b8" : "#1e293b",
+                    }}
+                  >
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                      {areaLabel()}
+                    </span>
+                    <span style={{ marginLeft: 4, fontSize: 10, color: "#94a3b8" }}>{stateDropOpen ? "▲" : "▼"}</span>
+                  </button>
+
+                  {stateDropOpen && (
+                    <div style={{
+                      position: "absolute", top: "100%", left: 0, zIndex: 200,
+                      background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8,
+                      boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                      width: 280, maxHeight: 320, overflowY: "auto", padding: 8,
+                    }}>
+                      {/* Quick actions */}
+                      <div style={{ display: "flex", gap: 6, marginBottom: 8, paddingBottom: 8, borderBottom: "1px solid #f1f5f9" }}>
+                        <button onClick={selectAllStates} style={tinyBtn}>Select all</button>
+                        <button onClick={clearStates} style={tinyBtn}>Clear</button>
+                        <span style={{ fontSize: 11, color: "#94a3b8", alignSelf: "center", marginLeft: "auto" }}>
+                          {selectedStates.size} selected
+                        </span>
+                      </div>
+                      {/* State grid */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                        {US_STATES.map(code => (
+                          <label key={code} style={{
+                            display: "flex", alignItems: "center", gap: 6, padding: "4px 6px",
+                            borderRadius: 5, cursor: "pointer", fontSize: 12,
+                            background: selectedStates.has(code) ? "#eff6ff" : "transparent",
+                            color: selectedStates.has(code) ? "#2563eb" : "#334155",
+                            fontWeight: selectedStates.has(code) ? 600 : 400,
+                          }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedStates.has(code)}
+                              onChange={() => toggleState(code)}
+                              style={{ accentColor: "#2563eb" }}
+                            />
+                            <span style={{ fontWeight: 700, minWidth: 24 }}>{code}</span>
+                            <span style={{ fontSize: 10, color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {STATE_NAMES[code]}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      <div style={{ paddingTop: 8, borderTop: "1px solid #f1f5f9", marginTop: 8, textAlign: "right" }}>
+                        <button onClick={() => setStateDropOpen(false)} style={{ ...tinyBtn, background: "#2563eb", color: "#fff", border: "none" }}>
+                          Done
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Time range */}
+        <div>
+          <div style={filterLabel}>Time range</div>
+          <select value={days} onChange={e => setDays(e.target.value)} disabled={running} style={sel}>
+            {TIME_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+
+        {/* Source */}
+        <div>
+          <div style={filterLabel}>Source</div>
+          <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)} disabled={running} style={sel}>
+            {SOURCES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+
+        {/* Industry */}
+        <div>
+          <div style={filterLabel}>Industry</div>
+          <IndustryMultiSelect
+            selected={selectedIndustries}
+            onChange={setSelectedIndustries}
+            disabled={running}
+          />
+        </div>
+
+        {/* Remote */}
+        <div>
+          <div style={filterLabel}>Location type</div>
+          <select value={remoteFilter} onChange={e => setRemoteFilter(e.target.value as "" | "true" | "false")} disabled={running} style={sel}>
+            <option value="">Any (remote + on-site)</option>
+            <option value="true">Remote only</option>
+            <option value="false">On-site only</option>
+          </select>
+        </div>
+
+        {/* Re-score toggle */}
+        <div style={{ paddingTop: 20 }}>
+          <label style={checkLabel}>
+            <input type="checkbox" checked={rescore} onChange={e => setRescore(e.target.checked)} disabled={running} />
+            Re-score existing
+          </label>
+        </div>
+      </div>
+
+      {/* API key */}
+      <div style={{ marginBottom: 10 }}>
         <input
           type="password"
           value={apiKey}
           onChange={e => setApiKey(e.target.value)}
           disabled={running}
-          placeholder="API key (optional if set server-side)"
-          style={inp}
+          placeholder="API key (optional — uses server key if set)"
+          style={{ ...inp, width: "100%" }}
         />
-        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#64748b", cursor: "pointer", whiteSpace: "nowrap" }}>
-          <input
-            type="checkbox"
-            checked={recentOnly}
-            onChange={e => setRecentOnly(e.target.checked)}
-            disabled={running}
-          />
-          Posted in last 7 days only
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#64748b", cursor: "pointer", whiteSpace: "nowrap" }}>
-          <input
-            type="checkbox"
-            checked={rescore}
-            onChange={e => setRescore(e.target.checked)}
-            disabled={running}
-          />
-          Re-score already-scored jobs
-        </label>
       </div>
 
       {startError && (
@@ -192,14 +409,10 @@ export default function ScoreAllPanel({ onDone, onClose }: Props) {
 
       {/* Action buttons */}
       {!running && !done && (
-        <button onClick={start} style={primaryBtn}>
-          ▶ Start Scoring
-        </button>
+        <button onClick={start} style={primaryBtn}>▶ Start Scoring</button>
       )}
       {running && (
-        <button onClick={cancel} style={{ ...primaryBtn, background: "#dc2626" }}>
-          ✕ Cancel
-        </button>
+        <button onClick={cancel} style={{ ...primaryBtn, background: "#dc2626" }}>✕ Cancel</button>
       )}
       {done && (
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -211,12 +424,12 @@ export default function ScoreAllPanel({ onDone, onClose }: Props) {
         </div>
       )}
 
-      {/* Progress */}
+      {/* Progress bar */}
       {(running || done) && total > 0 && (
         <div style={{ marginTop: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#64748b", marginBottom: 4 }}>
             <span>{scored + failed} / {total} processed</span>
-            <span>{failed > 0 ? <span style={{ color: "#dc2626" }}>{failed} failed</span> : null} {pct}%</span>
+            <span>{failed > 0 && <span style={{ color: "#dc2626" }}>{failed} failed &nbsp;</span>}{pct}%</span>
           </div>
           <div style={{ background: "#e2e8f0", borderRadius: 999, height: 7, overflow: "hidden" }}>
             <div style={{
@@ -228,7 +441,7 @@ export default function ScoreAllPanel({ onDone, onClose }: Props) {
         </div>
       )}
 
-      {/* Log */}
+      {/* Live log */}
       {log.length > 0 && (
         <div style={{ marginTop: 12, maxHeight: 180, overflowY: "auto", display: "flex", flexDirection: "column", gap: 3 }}>
           {log.map(entry => (
@@ -269,13 +482,51 @@ const panel: React.CSSProperties = {
   marginBottom: 16,
 };
 
+const sel: React.CSSProperties = {
+  width: "100%",
+  padding: "7px 9px",
+  border: "1px solid #cbd5e1",
+  borderRadius: 6,
+  fontSize: 12,
+  background: "#fff",
+  cursor: "pointer",
+};
+
 const inp: React.CSSProperties = {
-  flex: 1,
-  minWidth: 180,
   padding: "7px 10px",
   border: "1px solid #cbd5e1",
   borderRadius: 6,
   fontSize: 12,
+};
+
+const filterLabel: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  color: "#64748b",
+  marginBottom: 4,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
+
+const checkLabel: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 5,
+  fontSize: 12,
+  color: "#64748b",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const tinyBtn: React.CSSProperties = {
+  padding: "3px 8px",
+  fontSize: 11,
+  fontWeight: 600,
+  border: "1px solid #e2e8f0",
+  borderRadius: 4,
+  cursor: "pointer",
+  background: "#f8fafc",
+  color: "#334155",
 };
 
 const primaryBtn: React.CSSProperties = {

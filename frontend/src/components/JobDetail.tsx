@@ -1,7 +1,20 @@
-import { useState } from "react";
-import type { Job } from "../types";
-import { analyzeJob, generateApplicationPack } from "../api";
+import { useEffect, useState } from "react";
+import type { EmailEvent, Job } from "../types";
+import { analyzeJob, fetchEmailEvents, generateApplicationPack, getToken, updateJobStatus } from "../api";
 import ApplicationPack from "./ApplicationPack";
+
+const STATUSES = [
+  { key: "new",          label: "New",          color: "#64748b" },
+  { key: "interested",   label: "Interested",   color: "#6366f1" },
+  { key: "applied",      label: "Applied",      color: "#2563eb" },
+  { key: "phone_screen", label: "Phone Screen", color: "#0891b2" },
+  { key: "interview",    label: "Interview",    color: "#7c3aed" },
+  { key: "offer",        label: "Offer",        color: "#16a34a" },
+  { key: "rejected",     label: "Rejected",     color: "#dc2626" },
+  { key: "withdrawn",    label: "Withdrawn",    color: "#94a3b8" },
+];
+
+const STATUS_COLORS: Record<string, string> = Object.fromEntries(STATUSES.map(s => [s.key, s.color]));
 
 interface Props {
   job: Job;
@@ -25,6 +38,45 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [pack, setPack] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
+  const [emailEvents, setEmailEvents] = useState<EmailEvent[]>([]);
+  useEffect(() => {
+    if (getToken()) {
+      fetchEmailEvents(job.id).then(setEmailEvents).catch(() => null);
+    }
+  }, [job.id]);
+
+  const [status, setStatus] = useState(job.status || "new");
+  const [notes, setNotes] = useState(job.notes || "");
+  const [appliedDate, setAppliedDate] = useState(
+    job.applied_date ? job.applied_date.slice(0, 10) : ""
+  );
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function persist(overrides: { status?: string; notes?: string; appliedDate?: string } = {}) {
+    const s = overrides.status ?? status;
+    const n = overrides.notes ?? notes;
+    const d = overrides.appliedDate ?? appliedDate;
+    setSaving(true);
+    try {
+      await updateJobStatus(job.id, s, n, d || undefined);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleStatusChange(newStatus: string) {
+    setStatus(newStatus);
+    await persist({ status: newStatus });
+  }
+
+  async function handleDateChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const d = e.target.value;
+    setAppliedDate(d);
+    await persist({ appliedDate: d });
+  }
 
   async function handleAnalyze() {
     setAnalyzing(true);
@@ -133,7 +185,93 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
           </section>
         )}
 
-        <section style={{ marginTop: 32, padding: 16, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+        {/* Status tracker */}
+        <section style={{ marginTop: 24, padding: 16, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <h3 style={{ margin: 0, fontSize: 15 }}>Application Status</h3>
+            <span style={{ fontSize: 12, color: saving ? "#94a3b8" : saved ? "#16a34a" : "transparent" }}>
+              {saving ? "Saving…" : "✓ Saved"}
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+            {STATUSES.map(s => (
+              <button
+                key={s.key}
+                onClick={() => handleStatusChange(s.key)}
+                style={{
+                  padding: "5px 12px", fontSize: 12, fontWeight: 600,
+                  border: `1px solid ${s.key === status ? s.color : "#e2e8f0"}`,
+                  borderRadius: 99, cursor: "pointer",
+                  background: s.key === status ? s.color : "#fff",
+                  color: s.key === status ? "#fff" : "#64748b",
+                  transition: "all 0.15s",
+                }}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <label style={{ fontSize: 12, color: "#64748b", whiteSpace: "nowrap" }}>Applied date</label>
+            <input
+              type="date"
+              value={appliedDate}
+              onChange={handleDateChange}
+              style={{ padding: "5px 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 13, background: "#fff" }}
+            />
+          </div>
+          <textarea
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            onBlur={() => persist()}
+            placeholder="Notes — interview dates, contacts, follow-ups…"
+            rows={3}
+            style={{ width: "100%", padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 13, boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }}
+          />
+        </section>
+
+        {emailEvents.length > 0 && (
+          <section style={{ marginTop: 24, padding: 16, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+            <h3 style={{ margin: "0 0 14px", fontSize: 15 }}>📬 Email Timeline</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              {emailEvents.map((ev, i) => {
+                const color = STATUS_COLORS[ev.detected_status || ""] || "#94a3b8";
+                return (
+                  <div key={ev.id} style={{ display: "flex", gap: 12, position: "relative" }}>
+                    {/* vertical line */}
+                    {i < emailEvents.length - 1 && (
+                      <div style={{ position: "absolute", left: 7, top: 20, bottom: -8, width: 2, background: "#e2e8f0" }} />
+                    )}
+                    <div style={{
+                      width: 16, height: 16, borderRadius: "50%", background: color,
+                      flexShrink: 0, marginTop: 3, zIndex: 1,
+                    }} />
+                    <div style={{ paddingBottom: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        {ev.detected_status && (
+                          <span style={{
+                            fontSize: 11, fontWeight: 700, padding: "2px 7px",
+                            borderRadius: 99, background: color, color: "#fff",
+                            textTransform: "capitalize",
+                          }}>
+                            {ev.detected_status.replace("_", " ")}
+                          </span>
+                        )}
+                        <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                          {ev.email_date ? new Date(ev.email_date).toLocaleDateString() : ""}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#1a202c", marginTop: 2 }}>{ev.subject}</div>
+                      <div style={{ fontSize: 12, color: "#64748b", marginTop: 1 }}>{ev.snippet}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        <section style={{ marginTop: 24, padding: 16, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
           <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>AI Job Fit Analysis</h3>
           <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
             {PROVIDERS.map(p => (
@@ -201,7 +339,7 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
 
         {pack && (
           <ApplicationPack
-            result={pack as Parameters<typeof ApplicationPack>[0]["result"]}
+            result={pack as unknown as Parameters<typeof ApplicationPack>[0]["result"]}
             onClose={() => setPack(null)}
           />
         )}

@@ -19,6 +19,9 @@ class JobSource(str, Enum):
     usajobs = "usajobs"
     greenhouse = "greenhouse"
     lever = "lever"
+    ashby = "ashby"
+    eighty_k_hours = "80k_hours"
+    climatebase = "climatebase"
     manual = "manual"
     other = "other"
 
@@ -36,6 +39,9 @@ class JobLocation(BaseModel):
     country: str = "US"
     remote: bool = False
     raw: Optional[str] = None  # original string from source
+
+
+APPLICATION_STATUSES = ["new", "interested", "applied", "phone_screen", "interview", "offer", "rejected", "withdrawn"]
 
 
 class Job(BaseModel):
@@ -59,6 +65,10 @@ class Job(BaseModel):
     ai_summary: Optional[str] = None
     ai_score: Optional[float] = None    # 0-5 fit score vs resume
     ai_tags: list[str] = []
+    # Application tracking
+    status: str = "new"
+    applied_date: Optional[datetime] = None
+    notes: Optional[str] = None
 
 
 class JobCreate(BaseModel):
@@ -89,6 +99,9 @@ class JobUpdate(BaseModel):
     job_type: Optional[JobType] = None
     apply_url: Optional[str] = None
     deadline: Optional[datetime] = None
+    status: Optional[str] = None
+    applied_date: Optional[datetime] = None
+    notes: Optional[str] = None
 
 
 class JobSearchParams(BaseModel):

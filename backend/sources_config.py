@@ -1,8 +1,6 @@
 """
 Curated source lists — edit here to add/remove orgs without touching pipeline code.
-USGS_SEARCHES:  keyword+org combos for USAJobs federal searches
-GREENHOUSE_SLUGS: company slugs confirmed active on Greenhouse Jobs API
-LEVER_SLUGS:      company slugs confirmed active on Lever Postings API
+All slugs have been verified as active on their respective ATS platforms.
 """
 
 USAJOBS_SEARCHES = [
@@ -12,34 +10,57 @@ USAJOBS_SEARCHES = [
     {"keyword": "natural resources",         "pages": 2},
     {"keyword": "ecologist",                 "pages": 1},
     {"keyword": "soil scientist",            "pages": 1},
-    # Water / hydrology — USGS sweet spot
+    {"keyword": "conservation biologist",    "pages": 1},
+    # Water / hydrology
     {"keyword": "water resources",           "pages": 2},
     {"keyword": "water quality",             "pages": 2},
     {"keyword": "groundwater",               "pages": 1},
+    {"keyword": "hydrologist",               "pages": 1},
     {"keyword": "streamflow",                "pages": 1},
     # Geospatial / remote sensing
     {"keyword": "geospatial",                "pages": 2},
     {"keyword": "remote sensing",            "pages": 1},
     {"keyword": "GIS analyst",               "pages": 1},
+    {"keyword": "geographer",                "pages": 1},
     # Data science / analysis
     {"keyword": "data scientist",            "pages": 2},
-    {"keyword": "data analyst",              "organization": "EP", "pages": 1},  # EPA
-    {"keyword": "data analyst",              "organization": "IN", "pages": 1},  # Interior/USGS
-    # Climate / energy
-    {"keyword": "climate",                   "pages": 1},
+    {"keyword": "data analyst",    "organization": "EP", "pages": 1},  # EPA
+    {"keyword": "data analyst",    "organization": "IN", "pages": 1},  # Interior/USGS
+    {"keyword": "statistician",              "pages": 1},
+    # Climate / energy / atmosphere
+    {"keyword": "climate",                   "pages": 2},
     {"keyword": "atmospheric scientist",     "pages": 1},
+    {"keyword": "meteorologist",             "pages": 1},
+    {"keyword": "oceanographer",             "pages": 1},
+    {"keyword": "air quality",               "pages": 1},
+    # HPC / AI / computational
+    {"keyword": "machine learning",          "pages": 1},
+    {"keyword": "computational scientist",   "pages": 1},
+    {"keyword": "research scientist",        "pages": 1},
+    # Agency-specific
+    {"keyword": "scientist",    "organization": "EP", "pages": 2},   # EPA
+    {"keyword": "scientist",    "organization": "GS", "pages": 2},   # USGS
+    {"keyword": "scientist",    "organization": "NN", "pages": 1},   # NOAA
+    {"keyword": "engineer",     "organization": "IN", "pages": 1},   # Interior
+    {"keyword": "analyst",      "organization": "AG", "pages": 1},   # USDA/Forest Service
 ]
 
+# Verified active Greenhouse boards (200 from boards-api.greenhouse.io)
 GREENHOUSE_SLUGS = [
-    # Environmental nonprofits & policy
-    "wri",             # World Resources Institute
-    "watershed",       # Climate software / carbon accounting
-    "rti",             # RTI International (research/consulting)
-    "enviva",          # Biomass/renewable energy
+    "wri",              # World Resources Institute
+    "watershed",        # Climate software / carbon accounting
+    "rti",              # RTI International (research/consulting)
+    "enviva",           # Biomass/renewable energy
+    "climateai",        # Climate AI analytics
+    "sunnova",          # Solar + battery
 ]
 
+# Verified active Lever boards
 LEVER_SLUGS = [
-    # Environmental consulting & clean energy
-    "erg",             # Environmental Resources Group (consulting)
-    "arcadia",         # Clean energy retail / data
+    "erg",              # Environmental Resources Group (consulting)
+    "arcadia",          # Clean energy retail / data
 ]
+
+# Ashby slugs — included but silently skipped if auth is required
+# (Ashby's public API is not truly public; boards are authenticated per-company)
+ASHBY_SLUGS: list[str] = []

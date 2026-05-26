@@ -1,5 +1,20 @@
 import type { Job } from "../types";
 
+const STATUS_COLORS: Record<string, { color: string; bg: string }> = {
+  interested:   { color: "#6366f1", bg: "#eef2ff" },
+  applied:      { color: "#2563eb", bg: "#eff6ff" },
+  phone_screen: { color: "#0891b2", bg: "#ecfeff" },
+  interview:    { color: "#7c3aed", bg: "#f5f3ff" },
+  offer:        { color: "#16a34a", bg: "#f0fdf4" },
+  rejected:     { color: "#dc2626", bg: "#fef2f2" },
+  withdrawn:    { color: "#94a3b8", bg: "#f8fafc" },
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  interested: "Interested", applied: "Applied", phone_screen: "Phone Screen",
+  interview: "Interview", offer: "Offer", rejected: "Rejected", withdrawn: "Withdrawn",
+};
+
 const SOURCE_COLORS: Record<string, string> = {
   usajobs: "#0050d8",
   greenhouse: "#24b47e",
@@ -75,18 +90,18 @@ export default function JobCard({ job, onSelect }: Props) {
         {formatSalary(job) && (
           <span style={{ fontSize: 12, color: "#718096" }}>· {formatSalary(job)}</span>
         )}
-        <span
-          style={{
-            fontSize: 11,
-            background: color + "22",
-            color,
-            borderRadius: 4,
-            padding: "1px 7px",
-            fontWeight: 600,
-          }}
-        >
+        <span style={{ fontSize: 11, background: color + "22", color, borderRadius: 4, padding: "1px 7px", fontWeight: 600 }}>
           {job.source.toUpperCase()}
         </span>
+        {job.status && job.status !== "new" && STATUS_COLORS[job.status] && (
+          <span style={{
+            fontSize: 11, fontWeight: 600, borderRadius: 4, padding: "1px 7px",
+            background: STATUS_COLORS[job.status].bg,
+            color: STATUS_COLORS[job.status].color,
+          }}>
+            {STATUS_LABELS[job.status]}
+          </span>
+        )}
         {job.location.remote && (
           <span style={{ fontSize: 11, background: "#e0f2fe", color: "#0369a1", borderRadius: 4, padding: "1px 7px" }}>
             Remote

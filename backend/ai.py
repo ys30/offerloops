@@ -98,8 +98,8 @@ def _strip_json(raw: str) -> str:
 
 async def _call_anthropic(system: str, user: str, model: str, api_key: str, max_tokens: int = 1024) -> str:
     import anthropic
-    client = anthropic.Anthropic(api_key=api_key)
-    resp = client.messages.create(
+    client = anthropic.AsyncAnthropic(api_key=api_key)
+    resp = await client.messages.create(
         model=model,
         max_tokens=max_tokens,
         system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
@@ -112,31 +112,39 @@ async def _call_openai_compat(
     system: str, user: str, model: str, api_key: str,
     base_url: Optional[str] = None, max_tokens: int = 1024,
 ) -> str:
-    from openai import OpenAI
+    import asyncio
+    from openai import AsyncOpenAI, RateLimitError
     kwargs: dict = {"api_key": api_key}
     if base_url:
         kwargs["base_url"] = base_url
-    client = OpenAI(**kwargs)
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        max_tokens=max_tokens,
-        temperature=0.2,
-    )
-    return resp.choices[0].message.content or ""
+    client = AsyncOpenAI(**kwargs)
+    for attempt in range(4):
+        try:
+            resp = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                max_tokens=max_tokens,
+                temperature=0.2,
+            )
+            return resp.choices[0].message.content or ""
+        except RateLimitError:
+            if attempt == 3:
+                raise
+            await asyncio.sleep(2 ** attempt * 5)  # 5s, 10s, 20s
 
 
 async def _call_gemini(system: str, user: str, model: str, api_key: str, max_tokens: int = 1024) -> str:
+    import asyncio
     import google.generativeai as genai
     genai.configure(api_key=api_key)
     gmodel = genai.GenerativeModel(
         model_name=model,
         system_instruction=system,
     )
-    resp = gmodel.generate_content(user)
+    resp = await asyncio.to_thread(gmodel.generate_content, user)
     return resp.text
 
 
