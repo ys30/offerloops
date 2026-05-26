@@ -276,6 +276,39 @@ def get_tracker(user_id: str = Depends(_require_user), db: Session = Depends(get
     return grouped
 
 
+# ── Follow-up reminders ──────────────────────────────────────────────
+
+_FOLLOWUP_DAYS = {
+    "applied":      7,
+    "phone_screen": 3,
+    "interview":    1,
+    "interested":   14,
+}
+
+@app.get("/api/followups", tags=["tracker"])
+def get_followups(user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    """Return jobs where a follow-up is due based on status + last update."""
+    from datetime import timedelta
+    now = datetime.utcnow()
+    due = []
+    for status, days in _FOLLOWUP_DAYS.items():
+        cutoff = now - timedelta(days=days)
+        rows = db.query(JobRow).filter(
+            JobRow.user_id == user_id,
+            JobRow.status == status,
+            JobRow.updated_at <= cutoff,
+        ).order_by(JobRow.updated_at.asc()).all()
+        for row in rows:
+            days_overdue = (now - row.updated_at).days - days
+            due.append({
+                **row_to_job(row).model_dump(mode="json"),
+                "followup_due_days": days,
+                "days_overdue": max(0, days_overdue),
+            })
+    due.sort(key=lambda x: x["days_overdue"], reverse=True)
+    return due
+
+
 # ── Ingestion ────────────────────────────────────────────────────────
 
 

@@ -150,6 +150,12 @@ export async function fetchTracker(): Promise<Record<string, Job[]>> {
   return res.json();
 }
 
+export async function fetchFollowups(): Promise<(Job & { followup_due_days: number; days_overdue: number })[]> {
+  const res = await fetch(`${BASE}/followups`, { headers: authHeaders() });
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export async function fetchStats(): Promise<Stats> {
   const res = await fetch(`${BASE}/stats`, { headers: authHeaders() });
   if (!res.ok) throw new Error(await res.text());

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchEmailEvents, fetchGmailStatus, fetchTracker, syncGmail, updateJobStatus } from "../api";
+import { fetchEmailEvents, fetchFollowups, fetchGmailStatus, fetchTracker, syncGmail, updateJobStatus } from "../api";
 import type { EmailEvent, Job, User } from "../types";
+
+type FollowupJob = Job & { followup_due_days: number; days_overdue: number };
 
 const COLUMNS: { key: string; label: string; color: string; bg: string }[] = [
   { key: "interested",   label: "Interested",   color: "#6366f1", bg: "#eef2ff" },
@@ -24,13 +26,15 @@ export default function TrackerPage({ user, onSelectJob }: Props) {
   const [lastSynced, setLastSynced] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [followups, setFollowups] = useState<FollowupJob[]>([]);
   // email events keyed by job_id
   const [eventsByJob, setEventsByJob] = useState<Record<string, EmailEvent[]>>({});
 
   const load = useCallback(async () => {
     try {
-      const data = await fetchTracker();
+      const [data, fu] = await Promise.all([fetchTracker(), fetchFollowups()]);
       setGrouped(data);
+      setFollowups(fu);
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, []);
@@ -84,6 +88,36 @@ export default function TrackerPage({ user, onSelectJob }: Props) {
 
   return (
     <div>
+      {/* Follow-up reminders */}
+      {followups.length > 0 && (
+        <div style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: "#92400e", marginBottom: 8 }}>
+            ⏰ {followups.length} follow-up{followups.length > 1 ? "s" : ""} due
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {followups.slice(0, 5).map(job => (
+              <div key={job.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                <span style={{
+                  background: job.days_overdue > 3 ? "#dc2626" : "#f59e0b",
+                  color: "#fff", borderRadius: 99, padding: "1px 8px", fontSize: 11, whiteSpace: "nowrap"
+                }}>
+                  {job.days_overdue === 0 ? "due today" : `${job.days_overdue}d overdue`}
+                </span>
+                <button
+                  onClick={() => onSelectJob(job.id)}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#1e293b", fontWeight: 600, padding: 0, textAlign: "left" }}
+                >
+                  {job.company} — {job.title}
+                </button>
+                <span style={{ color: "#94a3b8", fontSize: 11 }}>({job.status})</span>
+              </div>
+            ))}
+            {followups.length > 5 && (
+              <div style={{ fontSize: 12, color: "#92400e" }}>+{followups.length - 5} more</div>
+            )}
+          </div>
+        </div>
+      )}
       {/* Header row */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
         <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#1e293b" }}>Application Tracker</h2>
