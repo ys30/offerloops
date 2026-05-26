@@ -1641,7 +1641,6 @@ def list_industries(db: Session = Depends(get_db)):
             "prev_7d": prev, "trend_pct": trend_pct,
         })
     return result
-    ]
 
 
 @app.get("/api/market", tags=["meta"])
