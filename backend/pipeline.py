@@ -9,7 +9,7 @@ from typing import Optional
 
 from .database import JobRow
 from .models import Job, JobSource
-from .sources import USAJobsSource, GreenhouseSource, LeverSource, AshbySource, EightyKHoursSource, ClimatebaseSource
+from .sources import USAJobsSource, GreenhouseSource, LeverSource, AshbySource, EightyKHoursSource, ClimatebaseSource, IdealistSource
 
 SOURCES = {
     "usajobs":     USAJobsSource(),
@@ -18,6 +18,7 @@ SOURCES = {
     "ashby":       AshbySource(),
     "80k_hours":   EightyKHoursSource(),
     "climatebase": ClimatebaseSource(),
+    "idealist":    IdealistSource(),
 }
 
 
@@ -185,6 +186,19 @@ async def ingest_climatebase(db: Session, user_id: Optional[str] = None) -> dict
     return {"ingested": ingested, "skipped": skipped, "source": "climatebase"}
 
 
+async def ingest_idealist(db: Session, user_id: Optional[str] = None) -> dict:
+    source = SOURCES["idealist"]
+    ingested, skipped = 0, 0
+    async for job in source.fetch():
+        if db.get(JobRow, job.id):
+            skipped += 1
+            continue
+        db.add(job_to_row(job, user_id=user_id))
+        ingested += 1
+    db.commit()
+    return {"ingested": ingested, "skipped": skipped, "source": "idealist"}
+
+
 async def bulk_ingest(db: Session, user_id: Optional[str] = None) -> dict:
     """Run all configured searches from sources_config.py."""
     from .sources_config import USAJOBS_SEARCHES, GREENHOUSE_SLUGS, LEVER_SLUGS, ASHBY_SLUGS
@@ -222,6 +236,11 @@ async def bulk_ingest(db: Session, user_id: Optional[str] = None) -> dict:
     results.append(r)
 
     r = await ingest_climatebase(db, user_id=user_id)
+    totals["ingested"] += r["ingested"]
+    totals["skipped"] += r["skipped"]
+    results.append(r)
+
+    r = await ingest_idealist(db, user_id=user_id)
     totals["ingested"] += r["ingested"]
     totals["skipped"] += r["skipped"]
     results.append(r)

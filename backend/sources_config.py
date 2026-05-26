@@ -47,18 +47,44 @@ USAJOBS_SEARCHES = [
 
 # Verified active Greenhouse boards (200 from boards-api.greenhouse.io)
 GREENHOUSE_SLUGS = [
+    # Environmental NGOs / think tanks
     "wri",              # World Resources Institute
+    "nrdc",             # Natural Resources Defense Council
+    "edf",              # Environmental Defense Fund
+    "rmi",              # Rocky Mountain Institute
+    "ceres",            # Ceres (sustainable investing)
+    "earthjustice",     # Environmental law nonprofit
+    "nature",           # The Nature Conservancy
+    "wcs",              # Wildlife Conservation Society
+    "awf",              # African Wildlife Foundation
+    # Climate tech / energy
     "watershed",        # Climate software / carbon accounting
-    "rti",              # RTI International (research/consulting)
-    "enviva",           # Biomass/renewable energy
     "climateai",        # Climate AI analytics
     "sunnova",          # Solar + battery
+    "arcadiapower",     # Clean energy data
+    "inari",            # Agricultural biotech / food systems
+    # Research / consulting
+    "rti",              # RTI International (research/consulting)
+    "icf",              # ICF (environmental consulting)
+    "tetratech",        # Tetra Tech (engineering/environment)
+    # Data / geospatial
+    "descartes",        # Descartes Labs (geospatial AI)
+    "planet",           # Planet Labs (satellite imagery)
+    # Energy / resources
+    "enviva",           # Biomass/renewable energy
+    "nrg",              # NRG Energy
+    "nextracker",       # Solar tracking systems
 ]
 
 # Verified active Lever boards
 LEVER_SLUGS = [
     "erg",              # Environmental Resources Group (consulting)
     "arcadia",          # Clean energy retail / data
+    "terraformation",   # Reforestation startup
+    "pachama",          # Forest carbon monitoring
+    "watershed",        # Climate accounting (also on GH, deduplicated by source_id)
+    "energyvault",      # Grid-scale energy storage
+    "antora",           # Thermal energy storage
 ]
 
 # Ashby slugs — included but silently skipped if auth is required
