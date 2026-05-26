@@ -12,8 +12,13 @@ interface Profile {
   updated_at?: string;
 }
 
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const t = getToken();
+  return t ? { Authorization: `Bearer ${t}`, ...extra } : { ...extra };
+}
+
 async function fetchProfile(): Promise<Profile | null> {
-  const res = await fetch("/api/profile");
+  const res = await fetch("/api/profile", { headers: authHeaders() });
   if (res.status === 404) return null;
   return res.json();
 }
@@ -21,7 +26,7 @@ async function fetchProfile(): Promise<Profile | null> {
 async function saveProfile(data: Partial<Profile>): Promise<Profile> {
   const res = await fetch("/api/profile", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error(await res.text());
@@ -31,13 +36,13 @@ async function saveProfile(data: Partial<Profile>): Promise<Profile> {
 async function uploadResume(file: File): Promise<Profile> {
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch("/api/profile/upload", { method: "POST", body: form });
+  const res = await fetch("/api/profile/upload", { method: "POST", headers: authHeaders(), body: form });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
 async function importLinkedIn(url: string): Promise<Profile> {
-  const res = await fetch(`/api/profile/linkedin?url=${encodeURIComponent(url)}`, { method: "POST" });
+  const res = await fetch(`/api/profile/linkedin?url=${encodeURIComponent(url)}`, { method: "POST", headers: authHeaders() });
   if (!res.ok) {
     const body = await res.text();
     try { throw new Error(JSON.parse(body).detail); } catch { throw new Error(body); }
