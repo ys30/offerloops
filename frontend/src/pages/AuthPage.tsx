@@ -34,13 +34,20 @@ export default function AuthModal({ onAuth, onClose, resetToken }: Props) {
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
   const [configured, setConfigured] = useState<Record<string, boolean>>({});
+  const [googleClientId, setGoogleClientId] = useState<string | undefined>(
+    import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
+  );
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const googleBtnRef = useRef<HTMLDivElement>(null);
-  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
   useEffect(() => {
-    fetchAuthProviders().then(setConfigured).catch(() => {});
+    fetchAuthProviders().then(data => {
+      setConfigured(data);
+      if (data.google_client_id && !googleClientId) {
+        setGoogleClientId(data.google_client_id);
+      }
+    }).catch(() => {});
   }, []);
 
   // Load Google GSI script and render button

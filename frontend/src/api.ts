@@ -78,7 +78,7 @@ export async function resetPassword(token: string, password: string): Promise<{ 
   return res.json();
 }
 
-export async function fetchAuthProviders(): Promise<{ google: boolean; github: boolean; linkedin: boolean; microsoft: boolean }> {
+export async function fetchAuthProviders(): Promise<{ google: boolean; google_client_id?: string; github: boolean; linkedin: boolean; microsoft: boolean }> {
   const res = await fetch(`${BASE}/auth/providers`);
   return res.json();
 }

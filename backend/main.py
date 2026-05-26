@@ -841,11 +841,13 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
 @app.get("/api/auth/providers", tags=["auth"])
 def auth_providers():
     """Return which OAuth providers are configured."""
+    google_client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
     return {
-        "google":    bool(os.environ.get("GOOGLE_CLIENT_ID")),
-        "github":    bool(os.environ.get("GITHUB_CLIENT_ID")),
-        "linkedin":  bool(os.environ.get("LINKEDIN_CLIENT_ID")),
-        "microsoft": bool(os.environ.get("MICROSOFT_CLIENT_ID")),
+        "google":           bool(google_client_id),
+        "google_client_id": google_client_id,
+        "github":           bool(os.environ.get("GITHUB_CLIENT_ID")),
+        "linkedin":         bool(os.environ.get("LINKEDIN_CLIENT_ID")),
+        "microsoft":        bool(os.environ.get("MICROSOFT_CLIENT_ID")),
     }
 
 
