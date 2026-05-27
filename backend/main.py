@@ -507,10 +507,15 @@ async def generate_stories(
     profile = get_profile(db, user_id)
     if not profile or not profile.resume_text:
         raise HTTPException(status_code=422, detail="Upload your resume on the Profile page first.")
-    prompt = f"""Based on this resume, generate 4 distinct STAR interview stories covering different experiences and skills.
+
+    from .links_fetcher import build_links_context
+    links_ctx = await build_links_context(profile)
+    extra = f"\n\nAdditional context from profile links:\n{links_ctx}" if links_ctx else ""
+
+    prompt = f"""Based on this resume, generate 4 distinct STAR interview stories covering different experiences and skills. Where relevant, reference specific projects or publications from the additional context.
 
 Resume:
-{profile.resume_text[:4000]}
+{profile.resume_text[:4000]}{extra}
 
 Return a JSON array of objects with keys: title, situation, task, action, result, skills (array of 3-5 skill strings).
 Only return the JSON array, no other text."""
@@ -683,6 +688,7 @@ async def analyze_job(payload: AnalyzeRequest, user_id: str = Depends(_require_u
         raise HTTPException(status_code=404, detail="Job not found")
 
     resume_text = payload.resume_text
+    profile = None
     if not resume_text:
         from .profile import get_profile
         profile = get_profile(db, user_id)
@@ -690,6 +696,15 @@ async def analyze_job(payload: AnalyzeRequest, user_id: str = Depends(_require_u
             resume_text = profile.resume_text
         else:
             raise HTTPException(status_code=422, detail="No resume provided and no profile saved. Upload your resume first.")
+
+    if profile is None:
+        from .profile import get_profile
+        profile = get_profile(db, user_id)
+    if profile:
+        from .links_fetcher import build_links_context
+        links_ctx = await build_links_context(profile)
+        if links_ctx:
+            resume_text = resume_text + "\n\n--- Additional context from profile links ---\n" + links_ctx
 
     try:
         result = await analyze_job_fit(
@@ -729,13 +744,23 @@ async def generate_application_pack(
         raise HTTPException(status_code=404, detail="Job not found")
 
     resume_text = payload.resume_text
+    pack_profile = None
     if not resume_text:
         from .profile import get_profile
-        profile = get_profile(db, user_id)
-        if profile and profile.resume_text:
-            resume_text = profile.resume_text
+        pack_profile = get_profile(db, user_id)
+        if pack_profile and pack_profile.resume_text:
+            resume_text = pack_profile.resume_text
         else:
             raise HTTPException(status_code=422, detail="No resume provided and no profile saved. Upload your resume first.")
+
+    if pack_profile is None:
+        from .profile import get_profile
+        pack_profile = get_profile(db, user_id)
+    if pack_profile:
+        from .links_fetcher import build_links_context
+        links_ctx = await build_links_context(pack_profile)
+        if links_ctx:
+            resume_text = resume_text + "\n\n--- Additional context from profile links ---\n" + links_ctx
 
     try:
         provider_used, _ = _pick_provider(payload.provider, payload.api_key)
