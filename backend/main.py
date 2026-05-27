@@ -933,6 +933,19 @@ async def ai_search(
 
 # ── Profile ──────────────────────────────────────────────────────────
 
+def _profile_out(row) -> ProfileOut:
+    return ProfileOut(
+        id=row.id, name=row.name, email=row.email, phone=row.phone,
+        location=row.location,
+        linkedin_url=row.linkedin_url,
+        github_url=getattr(row, "github_url", None),
+        google_scholar_url=getattr(row, "google_scholar_url", None),
+        orcid_url=getattr(row, "orcid_url", None),
+        website_url=getattr(row, "website_url", None),
+        twitter_url=getattr(row, "twitter_url", None),
+        resume_text=row.resume_text, updated_at=row.updated_at,
+    )
+
 
 @app.get("/api/profile", response_model=ProfileOut, tags=["profile"])
 def get_profile_route(user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
@@ -940,22 +953,14 @@ def get_profile_route(user_id: str = Depends(_require_user), db: Session = Depen
     row = get_profile(db, user_id)
     if not row:
         raise HTTPException(status_code=404, detail="No profile saved yet")
-    return ProfileOut(
-        id=row.id, name=row.name, email=row.email, phone=row.phone,
-        location=row.location, linkedin_url=row.linkedin_url,
-        resume_text=row.resume_text, updated_at=row.updated_at,
-    )
+    return _profile_out(row)
 
 
 @app.post("/api/profile", response_model=ProfileOut, tags=["profile"])
 def save_profile(payload: ProfileIn, user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
     from .profile import upsert_profile
     row = upsert_profile(db, user_id=user_id, **payload.model_dump(exclude_none=True))
-    return ProfileOut(
-        id=row.id, name=row.name, email=row.email, phone=row.phone,
-        location=row.location, linkedin_url=row.linkedin_url,
-        resume_text=row.resume_text, updated_at=row.updated_at,
-    )
+    return _profile_out(row)
 
 
 @app.post("/api/profile/upload", response_model=ProfileOut, tags=["profile"])
@@ -1014,11 +1019,7 @@ async def upload_resume(file: UploadFile = File(...), user_id: str = Depends(_re
         text = await clean_resume_with_ai(text)
 
     row = upsert_profile(db, user_id=user_id, resume_text=text)
-    return ProfileOut(
-        id=row.id, name=row.name, email=row.email, phone=row.phone,
-        location=row.location, linkedin_url=row.linkedin_url,
-        resume_text=row.resume_text, updated_at=row.updated_at,
-    )
+    return _profile_out(row)
 
 
 @app.post("/api/profile/linkedin", response_model=ProfileOut, tags=["profile"])
@@ -1043,11 +1044,7 @@ async def import_linkedin(url: str = Query(...), user_id: str = Depends(_require
         structured = raw_text  # fall back to raw if AI unavailable
 
     row = upsert_profile(db, user_id=user_id, linkedin_url=url, resume_text=structured)
-    return ProfileOut(
-        id=row.id, name=row.name, email=row.email, phone=row.phone,
-        location=row.location, linkedin_url=row.linkedin_url,
-        resume_text=row.resume_text, updated_at=row.updated_at,
-    )
+    return _profile_out(row)
 
 
 # ── Auth ─────────────────────────────────────────────────────────────

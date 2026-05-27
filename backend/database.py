@@ -131,6 +131,11 @@ class ProfileRow(Base):
     phone = Column(String)
     location = Column(String)
     linkedin_url = Column(String)
+    github_url = Column(String)
+    google_scholar_url = Column(String)
+    orcid_url = Column(String)
+    website_url = Column(String)
+    twitter_url = Column(String)
     resume_text = Column(Text)          # raw text (source of truth for AI)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -234,6 +239,12 @@ def _migrate(conn):
         if row:
             cur.execute("UPDATE jobs SET user_id = ? WHERE user_id IS NULL", (row[0],))
 
+    # ── profiles table extra link columns ────────────────────────────────────
+    pcols2 = col_info("profiles")
+    for col in ["github_url", "google_scholar_url", "orcid_url", "website_url", "twitter_url"]:
+        if col not in pcols2:
+            cur.execute(f"ALTER TABLE profiles ADD COLUMN {col} TEXT")
+
     # ── stories table ────────────────────────────────────────────────────────
     try:
         scols = col_info("stories")
@@ -268,6 +279,16 @@ def _migrate_pg(conn):
     """Add missing columns for PostgreSQL (SQLAlchemy inspect-based, dialect-agnostic)."""
     from sqlalchemy import inspect, text
     inspector = inspect(conn)
+    # profiles table — add link columns
+    try:
+        pcols = {c["name"] for c in inspector.get_columns("profiles")}
+        for col in ["github_url", "google_scholar_url", "orcid_url", "website_url", "twitter_url"]:
+            if col not in pcols:
+                conn.execute(text(f"ALTER TABLE profiles ADD COLUMN {col} TEXT"))
+        conn.commit()
+    except Exception:
+        pass
+
     # stories table — add columns introduced in pool-model refactor
     try:
         existing = {c["name"] for c in inspector.get_columns("stories")}

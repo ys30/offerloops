@@ -8,6 +8,11 @@ interface Profile {
   phone?: string;
   location?: string;
   linkedin_url?: string;
+  github_url?: string;
+  google_scholar_url?: string;
+  orcid_url?: string;
+  website_url?: string;
+  twitter_url?: string;
   resume_text?: string;
   updated_at?: string;
 }
@@ -54,6 +59,11 @@ export default function ProfilePage({ onBack }: { onBack: () => void }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [editResume, setEditResume] = useState("");
   const [linkedinUrl, setLinkedinUrl] = useState("");
+  const [githubUrl, setGithubUrl] = useState("");
+  const [scholarUrl, setScholarUrl] = useState("");
+  const [orcidUrl, setOrcidUrl] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [twitterUrl, setTwitterUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -73,6 +83,11 @@ export default function ProfilePage({ onBack }: { onBack: () => void }) {
       setProfile(p);
       setEditResume(p?.resume_text || "");
       setLinkedinUrl(p?.linkedin_url || "");
+      setGithubUrl(p?.github_url || "");
+      setScholarUrl(p?.google_scholar_url || "");
+      setOrcidUrl(p?.orcid_url || "");
+      setWebsiteUrl(p?.website_url || "");
+      setTwitterUrl(p?.twitter_url || "");
     });
   }, []);
 
@@ -84,7 +99,15 @@ export default function ProfilePage({ onBack }: { onBack: () => void }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const p = await saveProfile({ resume_text: editResume, linkedin_url: linkedinUrl || undefined });
+      const p = await saveProfile({
+        resume_text: editResume,
+        linkedin_url: linkedinUrl || undefined,
+        github_url: githubUrl || undefined,
+        google_scholar_url: scholarUrl || undefined,
+        orcid_url: orcidUrl || undefined,
+        website_url: websiteUrl || undefined,
+        twitter_url: twitterUrl || undefined,
+      });
       setProfile(p);
       flash("Profile saved.");
     } catch (e: unknown) {
@@ -220,12 +243,52 @@ export default function ProfilePage({ onBack }: { onBack: () => void }) {
             onChange={e => setLinkedinUrl(e.target.value)}
           />
           <button onClick={handleLinkedIn} disabled={importing || !linkedinUrl.trim()} style={primaryBtn}>
-            {importing ? "Importing…" : "Import"}
+            {importing ? "Importing…" : "Import Resume Text"}
           </button>
         </div>
         <p style={{ fontSize: 11, color: "#94a3b8", margin: "6px 0 0" }}>
-          Note: If LinkedIn blocks scraping, export your data from LinkedIn Settings → Get a copy of your data, then upload the PDF above.
+          Scrapes your LinkedIn page and converts it to resume text. If blocked, export from LinkedIn Settings → Data Privacy → Get a copy of your data, then upload the PDF above.
         </p>
+      </section>
+
+      {/* Professional links */}
+      <section style={{ ...card, marginTop: 16 }}>
+        <h2 style={sectionTitle}>Professional Links</h2>
+        <p style={{ fontSize: 12, color: "#94a3b8", margin: "0 0 14px" }}>
+          These are saved to your profile and help AI tailor your applications.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {[
+            { label: "LinkedIn", icon: "🔗", value: linkedinUrl, set: setLinkedinUrl, placeholder: "https://linkedin.com/in/your-profile" },
+            { label: "GitHub", icon: "🐙", value: githubUrl, set: setGithubUrl, placeholder: "https://github.com/username" },
+            { label: "Google Scholar", icon: "🎓", value: scholarUrl, set: setScholarUrl, placeholder: "https://scholar.google.com/citations?user=..." },
+            { label: "ORCID", icon: "🆔", value: orcidUrl, set: setOrcidUrl, placeholder: "https://orcid.org/0000-0000-0000-0000" },
+            { label: "Personal Website", icon: "🌐", value: websiteUrl, set: setWebsiteUrl, placeholder: "https://yoursite.com" },
+            { label: "Twitter / X", icon: "𝕏", value: twitterUrl, set: setTwitterUrl, placeholder: "https://twitter.com/username" },
+          ].map(({ label, icon, value, set, placeholder }) => (
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 16, width: 24, flexShrink: 0 }}>{icon}</span>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", width: 120, flexShrink: 0 }}>{label}</label>
+              <input
+                style={{ ...inp, flex: 1 }}
+                placeholder={placeholder}
+                value={value}
+                onChange={e => set(e.target.value)}
+              />
+              {value && (
+                <a href={value} target="_blank" rel="noopener noreferrer"
+                  style={{ fontSize: 12, color: "#2563eb", whiteSpace: "nowrap" }}>
+                  Open ↗
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
+          <button onClick={handleSave} disabled={saving} style={primaryBtn}>
+            {saving ? "Saving…" : "Save Links"}
+          </button>
+        </div>
       </section>
 
       {/* Gmail sync */}

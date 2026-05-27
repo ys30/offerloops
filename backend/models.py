@@ -157,6 +157,11 @@ class ProfileIn(BaseModel):
     phone: Optional[str] = None
     location: Optional[str] = None
     linkedin_url: Optional[str] = None
+    github_url: Optional[str] = None
+    google_scholar_url: Optional[str] = None
+    orcid_url: Optional[str] = None
+    website_url: Optional[str] = None
+    twitter_url: Optional[str] = None
     resume_text: Optional[str] = None
 
 
@@ -167,5 +172,10 @@ class ProfileOut(BaseModel):
     phone: Optional[str] = None
     location: Optional[str] = None
     linkedin_url: Optional[str] = None
+    github_url: Optional[str] = None
+    google_scholar_url: Optional[str] = None
+    orcid_url: Optional[str] = None
+    website_url: Optional[str] = None
+    twitter_url: Optional[str] = None
     resume_text: Optional[str] = None
     updated_at: Optional[datetime] = None
