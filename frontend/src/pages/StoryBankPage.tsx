@@ -8,6 +8,15 @@ interface Props {
   onBack: () => void;
 }
 
+function extractError(raw: string): string {
+  try {
+    const obj = JSON.parse(raw);
+    return obj.detail ?? raw;
+  } catch {
+    return raw;
+  }
+}
+
 const EMPTY: Partial<Story> = {
   title: "", situation: "", task: "", action: "", result: "",
   skills: [], linked_job_ids: [], ai_polished: false,
@@ -22,6 +31,7 @@ export default function StoryBankPage({ onBack }: Props) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [provider, setProvider] = useState("nvidia");
+  const [apiKey, setApiKey] = useState("");
 
   useEffect(() => { load(); }, []);
 
@@ -55,7 +65,7 @@ export default function StoryBankPage({ onBack }: Props) {
       setEditing(null);
       setEditId(null);
     } catch (e: any) {
-      setError(e.message);
+      setError(extractError(e.message));
     } finally {
       setSaving(false);
     }
@@ -71,10 +81,10 @@ export default function StoryBankPage({ onBack }: Props) {
     setPolishingId(id);
     setError("");
     try {
-      const updated = await polishStory(id, provider);
+      const updated = await polishStory(id, provider, apiKey || undefined);
       setStories(ss => ss.map(s => s.id === id ? updated : s));
     } catch (e: any) {
-      setError(e.message);
+      setError(extractError(e.message));
     } finally {
       setPolishingId(null);
     }
@@ -84,10 +94,10 @@ export default function StoryBankPage({ onBack }: Props) {
     setGenerating(true);
     setError("");
     try {
-      const newStories = await generateStories(provider);
+      const newStories = await generateStories(provider, apiKey || undefined);
       setStories(ss => [...ss, ...newStories]);
     } catch (e: any) {
-      setError(e.message);
+      setError(extractError(e.message));
     } finally {
       setGenerating(false);
     }
@@ -118,22 +128,28 @@ export default function StoryBankPage({ onBack }: Props) {
       {/* Action bar */}
       <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
         <button onClick={startNew} style={primaryBtn}>+ New Story</button>
-        <select
-          value={provider}
-          onChange={e => setProvider(e.target.value)}
-          style={selectStyle}
-        >
-          <option value="nvidia">NVIDIA NIM</option>
-          <option value="anthropic">Claude</option>
-          <option value="openai">OpenAI</option>
-          <option value="gemini">Gemini</option>
-        </select>
-        <button onClick={handleGenerate} disabled={generating} style={aiBtn}>
-          {generating ? "Generating…" : "✨ AI Generate from Resume"}
-        </button>
-        <span style={{ fontSize: 12, color: "#94a3b8", marginLeft: 4 }}>
-          AI reads your profile resume and creates draft STAR stories
-        </span>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", padding: "10px 14px", background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+          <select
+            value={provider}
+            onChange={e => setProvider(e.target.value)}
+            style={selectStyle}
+          >
+            <option value="nvidia">NVIDIA NIM</option>
+            <option value="anthropic">Claude</option>
+            <option value="openai">OpenAI</option>
+            <option value="gemini">Gemini</option>
+          </select>
+          <input
+            type="password"
+            value={apiKey}
+            onChange={e => setApiKey(e.target.value)}
+            placeholder="API key (leave blank if set on server)"
+            style={{ ...inputStyle, width: 260, marginBottom: 0 }}
+          />
+          <button onClick={handleGenerate} disabled={generating} style={aiBtn}>
+            {generating ? "Generating…" : "✨ AI Generate from Resume"}
+          </button>
+        </div>
       </div>
 
       {/* Edit form */}

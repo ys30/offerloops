@@ -413,14 +413,15 @@ class StoryIn(BaseModel):
 
 def _story_out(row: StoryRow) -> dict:
     import json as _j
+    linked_raw = getattr(row, "linked_job_ids", None)
     return {
         "id": row.id, "user_id": row.user_id,
         "title": row.title,
         "situation": row.situation, "task": row.task,
         "action": row.action, "result": row.result,
         "skills": _j.loads(row.skills or "[]"),
-        "linked_job_ids": _j.loads(row.linked_job_ids or "[]"),
-        "ai_polished": row.ai_polished or False,
+        "linked_job_ids": _j.loads(linked_raw or "[]"),
+        "ai_polished": getattr(row, "ai_polished", False) or False,
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
@@ -514,7 +515,12 @@ Resume:
 Return a JSON array of objects with keys: title, situation, task, action, result, skills (array of 3-5 skill strings).
 Only return the JSON array, no other text."""
     import json as _j, uuid as _u
-    raw = await call_ai(prompt, provider=provider, api_key=api_key)
+    try:
+        raw = await call_ai(prompt, provider=provider, api_key=api_key)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AI provider error: {e}")
     try:
         start = raw.index("[")
         end = raw.rindex("]") + 1
@@ -560,7 +566,12 @@ Action: {row.action or ""}
 Result: {row.result or ""}
 
 Return JSON with keys: title, situation, task, action, result (strings only). No other text."""
-    raw = await call_ai(prompt, provider=provider, api_key=api_key)
+    try:
+        raw = await call_ai(prompt, provider=provider, api_key=api_key)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AI provider error: {e}")
     try:
         start = raw.index("{")
         end = raw.rindex("}") + 1
