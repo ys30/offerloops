@@ -55,7 +55,7 @@ async function importLinkedIn(url: string): Promise<Profile> {
   return res.json();
 }
 
-export default function ProfilePage({ onBack }: { onBack: () => void }) {
+export default function ProfilePage({ onBack, justConnectedGmail }: { onBack: () => void; justConnectedGmail?: boolean }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [editResume, setEditResume] = useState("");
   const [linkedinUrl, setLinkedinUrl] = useState("");
@@ -78,6 +78,19 @@ export default function ProfilePage({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     fetchGmailStatus().then(setGmailStatus).catch(() => null);
   }, []);
+
+  // If we just came back from Gmail OAuth, re-poll status after a short delay
+  // to ensure the backend has committed the token
+  useEffect(() => {
+    if (!justConnectedGmail) return;
+    const timer = setTimeout(() => {
+      fetchGmailStatus().then(s => {
+        setGmailStatus(s);
+        if (s.connected) flash("Gmail connected successfully!");
+      }).catch(() => null);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [justConnectedGmail]);
 
   useEffect(() => {
     fetchProfile().then(p => {
@@ -353,6 +366,7 @@ export default function ProfilePage({ onBack }: { onBack: () => void }) {
             )}
           </div>
         ) : (
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button onClick={handleGmailConnect} style={{ ...primaryBtn, display: "flex", alignItems: "center", gap: 8 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -362,6 +376,13 @@ export default function ProfilePage({ onBack }: { onBack: () => void }) {
             </svg>
             Connect Gmail
           </button>
+          <button
+            onClick={() => fetchGmailStatus().then(setGmailStatus).catch(() => null)}
+            style={{ ...secondaryBtn, fontSize: 12, padding: "6px 12px" }}
+          >
+            ↻ Recheck
+          </button>
+          </div>
         )}
       </section>
 

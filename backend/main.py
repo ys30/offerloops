@@ -1618,7 +1618,7 @@ def gmail_status(
         return {"connected": False, "last_synced_at": None}
     row = db.query(GmailTokenRow).filter(GmailTokenRow.user_id == user_id).first()
     return {
-        "connected": bool(row and row.refresh_token),
+        "connected": bool(row and (row.refresh_token or row.access_token)),
         "last_synced_at": row.last_synced_at.isoformat() if row and row.last_synced_at else None,
     }
 
@@ -1639,15 +1639,15 @@ def gmail_auth_redirect(token: str = Query(...)):
 
 @app.get("/api/gmail/callback", tags=["gmail"])
 async def gmail_callback(
-    code: str = Query(...),
+    code: str = Query(""),
     state: str = Query(""),
     error: str = Query(""),
     db: Session = Depends(get_db),
 ):
     from fastapi.responses import RedirectResponse
     from .gmail import exchange_code
-    if error:
-        return RedirectResponse(f"{_REDIRECT_BASE}/?gmail_error={error}")
+    if error or not code:
+        return RedirectResponse(f"{_REDIRECT_BASE}/?gmail_error={error or 'missing_code'}")
     client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
     client_secret = os.environ.get("GOOGLE_CLIENT_SECRET", "")
     if not client_id or not client_secret:
