@@ -234,6 +234,18 @@ def _migrate(conn):
         if row:
             cur.execute("UPDATE jobs SET user_id = ? WHERE user_id IS NULL", (row[0],))
 
+    # ── stories table ────────────────────────────────────────────────────────
+    try:
+        scols = col_info("stories")
+        for col, typ in {
+            "linked_job_ids": "TEXT DEFAULT '[]'",
+            "ai_polished":    "BOOLEAN DEFAULT 0",
+        }.items():
+            if col not in scols:
+                cur.execute(f"ALTER TABLE stories ADD COLUMN {col} {typ}")
+    except Exception:
+        pass  # table may not exist yet; create_all will handle it
+
     # ── profiles table ───────────────────────────────────────────────────────
     pcols = col_info("profiles")
     if "user_id" not in pcols:
@@ -252,8 +264,27 @@ def _migrate(conn):
     conn.commit()
 
 
+def _migrate_pg(conn):
+    """Add missing columns for PostgreSQL (SQLAlchemy inspect-based, dialect-agnostic)."""
+    from sqlalchemy import inspect, text
+    inspector = inspect(conn)
+    # stories table — add columns introduced in pool-model refactor
+    try:
+        existing = {c["name"] for c in inspector.get_columns("stories")}
+        if "linked_job_ids" not in existing:
+            conn.execute(text("ALTER TABLE stories ADD COLUMN linked_job_ids TEXT DEFAULT '[]'"))
+        if "ai_polished" not in existing:
+            conn.execute(text("ALTER TABLE stories ADD COLUMN ai_polished BOOLEAN DEFAULT FALSE"))
+        conn.commit()
+    except Exception:
+        pass  # table may not exist yet; create_all handles it
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
     if _is_sqlite:
         with engine.connect() as conn:
             _migrate(conn.connection.driver_connection)
+    else:
+        with engine.connect() as conn:
+            _migrate_pg(conn)

@@ -355,10 +355,11 @@ export async function generateStories(
   provider = "nvidia",
   apiKey?: string,
 ): Promise<Story[]> {
-  const res = await fetch(`${BASE}/stories/generate`, {
+  const qs = new URLSearchParams({ provider });
+  if (apiKey) qs.set("api_key", apiKey);
+  const res = await fetch(`${BASE}/stories/generate?${qs}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ provider, api_key: apiKey }),
+    headers: authHeaders(),
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
@@ -369,10 +370,11 @@ export async function polishStory(
   provider = "nvidia",
   apiKey?: string,
 ): Promise<Story> {
-  const res = await fetch(`${BASE}/stories/${id}/polish`, {
+  const qs = new URLSearchParams({ provider });
+  if (apiKey) qs.set("api_key", apiKey);
+  const res = await fetch(`${BASE}/stories/${id}/polish?${qs}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ provider, api_key: apiKey }),
+    headers: authHeaders(),
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();

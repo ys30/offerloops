@@ -409,6 +409,7 @@ class StoryIn(BaseModel):
     action: Optional[str] = None
     result: Optional[str] = None
     skills: list[str] = []
+    linked_job_ids: list[str] = []
 
 def _story_out(row: StoryRow) -> dict:
     import json as _j
@@ -437,7 +438,7 @@ def create_story(payload: StoryIn, user_id: str = Depends(_require_user), db: Se
         title=payload.title, situation=payload.situation, task=payload.task,
         action=payload.action, result=payload.result,
         skills=_j.dumps(payload.skills),
-        linked_job_ids="[]",
+        linked_job_ids=_j.dumps(payload.linked_job_ids),
     )
     db.add(story)
     db.commit()
@@ -455,6 +456,7 @@ def update_story(story_id: str, payload: StoryIn, user_id: str = Depends(_requir
     if payload.action is not None: row.action = payload.action
     if payload.result is not None: row.result = payload.result
     row.skills = _j.dumps(payload.skills)
+    row.linked_job_ids = _j.dumps(payload.linked_job_ids)
     db.commit()
     return _story_out(row)
 
