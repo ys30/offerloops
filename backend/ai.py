@@ -259,23 +259,23 @@ RULES — follow every one:
   "ats_keywords": ["keyword1", "keyword2"]
 }"""
 
-COVER_LETTER_SYSTEM = """You are a senior career coach who writes cover letters that get interviews at competitive organizations. Write a deeply personalized, compelling cover letter that stands out from generic applications.
+COVER_LETTER_SYSTEM = """You are a senior career coach who writes cover letters that get interviews at competitive organizations. Write a deeply personalized, compelling cover letter that fits on ONE PAGE (~280–320 words total). Every sentence must earn its place — no filler, no fluff.
 
-STRUCTURE (5 paragraphs, ~400–500 words total):
+STRUCTURE (4 tight paragraphs):
 
-1. HOOK (2–3 sentences): Open with a specific, compelling reason why THIS candidate is uniquely suited for THIS role at THIS organization. Reference something specific about the company's mission, a recent initiative, or a direct alignment between the candidate's most relevant achievement and a key job requirement. Never start with "I am writing to apply."
+1. HOOK (2 sentences): Open with a specific, compelling reason why THIS candidate is uniquely suited for THIS role at THIS organization. Reference a direct alignment between the candidate's strongest relevant achievement and a key job requirement. Never start with "I am writing to apply."
 
-2. EVIDENCE PARAGRAPH 1 (3–4 sentences): Describe the candidate's single most relevant achievement or project in detail. Include specific technologies used, scale/scope, and measurable outcome. Connect it directly to a requirement in the job description.
+2. EVIDENCE (3 sentences): Describe the candidate's single most relevant achievement. Include specific technologies, scale/scope, and a measurable outcome. Connect it directly to a requirement in the job description.
 
-3. EVIDENCE PARAGRAPH 2 (3–4 sentences): Describe a second distinct strength — ideally from a different area (e.g., if paragraph 1 was technical, paragraph 2 could be leadership, communication, or domain expertise). Again: specific, quantified, connected to the JD.
+3. ALIGNMENT (2 sentences): Explain what draws the candidate specifically to this organization — its mission, its approach, or its impact. Show how the candidate's values or career goals align with the employer's work.
 
-4. ALIGNMENT (2–3 sentences): Explain what draws the candidate specifically to this organization — its mission, its approach, its impact. Show genuine knowledge of the employer. Explain how the candidate's values or career goals align.
-
-5. CLOSING (2 sentences): Confident call to action. Express enthusiasm and availability.
+4. CLOSING (2 sentences): Confident call to action. Express enthusiasm and availability.
 
 RULES:
-- Use the candidate's actual name, companies, and achievements from the resume — never generic placeholders
+- ~280–320 words total — strictly one page when printed
+- Use the candidate's actual name, companies, and achievements — never generic placeholders
 - Vary sentence structure; avoid repetitive openings ("I have", "I am", "My experience")
+- Every sentence must be specific: no vague claims like "I am passionate about" or "I bring strong skills"
 - Professional but human tone — not stiff or bureaucratic
 - Output plain text only, no markdown, no headers"""
 
@@ -308,7 +308,7 @@ async def generate_cover_letter(
     resolved_provider, resolved_key = _pick_provider(provider, api_key)
     resolved_model = model or PROVIDERS[resolved_provider]["default_model"]
     user_msg = f"Job Title: {job_title}\nCompany: {company}\n\nJob Description:\n{job_description[:4000]}\n\nResume:\n{resume_text[:3500]}\n\nWrite the cover letter:"
-    return await _call_provider(resolved_provider, resolved_model, COVER_LETTER_SYSTEM, user_msg, resolved_key, max_tokens=2000)
+    return await _call_provider(resolved_provider, resolved_model, COVER_LETTER_SYSTEM, user_msg, resolved_key, max_tokens=1000)
 
 
 def _pick_provider(preferred: str, api_key: Optional[str]) -> tuple[str, str]:
