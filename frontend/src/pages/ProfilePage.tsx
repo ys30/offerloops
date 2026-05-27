@@ -55,7 +55,7 @@ async function importLinkedIn(url: string): Promise<Profile> {
   return res.json();
 }
 
-export default function ProfilePage({ onBack, justConnectedGmail }: { onBack: () => void; justConnectedGmail?: boolean }) {
+export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: { onBack: () => void; justConnectedGmail?: boolean; gmailError?: string | null }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [editResume, setEditResume] = useState("");
   const [linkedinUrl, setLinkedinUrl] = useState("");
@@ -78,6 +78,10 @@ export default function ProfilePage({ onBack, justConnectedGmail }: { onBack: ()
   useEffect(() => {
     fetchGmailStatus().then(setGmailStatus).catch(() => null);
   }, []);
+
+  useEffect(() => {
+    if (gmailError) flash(`Gmail connection failed: ${gmailError}`, false);
+  }, [gmailError]);
 
   // If we just came back from Gmail OAuth, re-poll status after a short delay
   // to ensure the backend has committed the token

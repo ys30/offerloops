@@ -33,6 +33,7 @@ export default function App() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [resetToken, setResetToken] = useState<string | null>(null);
   const [justConnectedGmail, setJustConnectedGmail] = useState(false);
+  const [gmailErrorMsg, setGmailErrorMsg] = useState<string | null>(null);
 
   // Restore session — also handle OAuth (?token=) and password reset (?reset_token=) redirects
   useEffect(() => {
@@ -55,6 +56,10 @@ export default function App() {
     if (gmailConnected || gmailError) window.history.replaceState({}, "", window.location.pathname);
     if (gmailConnected) {
       setJustConnectedGmail(true);
+      setTimeout(() => setShowProfile(true), 100);
+    }
+    if (gmailError) {
+      setGmailErrorMsg(gmailError);
       setTimeout(() => setShowProfile(true), 100);
     }
 
@@ -142,7 +147,7 @@ export default function App() {
         {showAuthModal && <AuthPage onAuth={handleAuth} onClose={() => { setShowAuthModal(false); setResetToken(null); }} resetToken={resetToken} />}
         <Header {...headerProps} profileActive />
         <main style={mainStyle}>
-          <ProfilePage onBack={() => setShowProfile(false)} justConnectedGmail={justConnectedGmail} />
+          <ProfilePage onBack={() => setShowProfile(false)} justConnectedGmail={justConnectedGmail} gmailError={gmailErrorMsg} />
         </main>
       </div>
     );

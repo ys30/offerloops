@@ -1607,6 +1607,18 @@ def dashboard(
 _GMAIL_REDIRECT = f"{_API_BASE}/api/gmail/callback"
 
 
+@app.get("/api/gmail/debug", tags=["gmail"])
+def gmail_debug():
+    """Non-sensitive config check — shows what's configured without exposing secrets."""
+    return {
+        "api_base": _API_BASE,
+        "redirect_base": _REDIRECT_BASE,
+        "gmail_redirect_uri": _GMAIL_REDIRECT,
+        "has_client_id": bool(os.environ.get("GOOGLE_CLIENT_ID")),
+        "has_client_secret": bool(os.environ.get("GOOGLE_CLIENT_SECRET")),
+    }
+
+
 @app.get("/api/gmail/status", tags=["gmail"])
 def gmail_status(
     credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer(auto_error=False)),
