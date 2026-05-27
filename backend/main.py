@@ -833,7 +833,7 @@ async def upload_project_doc(
         raise HTTPException(status_code=422, detail="Could not extract readable text from the file.")
 
     # AI parse into project fields
-    prompt = f"""You are a resume writer. Extract structured project information from this document and write it in sharp, resume-quality language that would impress a hiring manager.
+    prompt = f"""You are a senior technical writer who crafts project descriptions for top-tier research labs and tech companies. Your job is to make this project sound significant, credible, and compelling — the kind of description that makes a hiring manager stop scrolling.
 
 Document text:
 {text[:6000]}
@@ -842,17 +842,18 @@ Return ONLY valid JSON (no markdown) with these keys:
 {{
   "name": "concise project title (5 words max)",
   "dates": "time period e.g. 2022–2024 or empty string",
-  "role": "1 line: job title + 2-3 specific verbs describing what you did (e.g. 'Lead Data Scientist — designed ML pipeline, built Shiny dashboard, deployed to AWS')",
-  "description": "2 punchy sentences MAX. Start with a strong action verb. Describe WHAT was built, WHY it matters, and WHO uses it. No filler words. Example: 'Engineered a geospatial risk-scoring platform integrating CMIP6 climate projections with socioeconomic data to quantify county-level damage estimates. Deployed as an interactive R Shiny dashboard used by 3 federal agencies for climate adaptation planning.'",
-  "tech_stack": ["only real technologies, tools, languages, frameworks — no generic words like 'data' or 'analysis'"],
-  "outcome": "1-2 sentences with specific numbers: users, time saved, accuracy, publications, scale, adoption. Use ~ for estimates. Example: 'Reduced manual reporting time by ~40%; adopted by 12 research teams across 4 institutions.'",
+  "role": "your title on this project + what you personally owned (e.g. 'Lead Data Scientist — owned end-to-end pipeline design, model validation, and stakeholder delivery')",
+  "description": "2-3 sentences that tell the story: what problem existed and why it mattered → what you built and how → who it serves. Use strong, specific verbs (built, modeled, integrated, deployed, automated). Lead with the problem or the scale to create immediate gravity. Do NOT start every sentence with 'I'. Do NOT use filler phrases like 'a tool that', 'a system to', or 'in order to'. Example: 'Federal agencies lacked a scalable method to translate CMIP6 climate projections into county-level economic risk estimates. Built an end-to-end geospatial pipeline integrating multi-model ensemble data with socioeconomic indicators, surfaced through an interactive R Shiny dashboard. Now used by 3 agencies for national climate adaptation planning.'",
+  "tech_stack": ["real technologies only — languages, frameworks, libraries, platforms; no generic words like 'data', 'analysis', 'modeling'"],
+  "outcome": "the most impressive measurable result: scale, adoption, accuracy gain, time saved, publications, policy impact. Use specific numbers; use ~ for estimates. Example: 'Adopted by 12 research teams across 4 institutions; cut reporting time by ~40% and cited in 2 EPA policy briefs.'",
   "url": "any URL found in the document or empty string"
 }}
 
 Rules:
-- description must start with a strong past-tense action verb (Engineered, Designed, Built, Developed, Deployed, Automated, Modeled)
-- every word must earn its place — cut anything vague or generic
-- extract only facts stated in the document; use ~ for reasonable estimates"""
+- make the reader feel the significance of the project in the first sentence
+- use ~ for estimates, but commit to numbers — "~3x faster" beats "significantly faster"
+- extract only facts from the document; infer reasonable scale estimates where the doc implies but doesn't state
+- cut adjectives that don't carry information (innovative, powerful, robust, cutting-edge)"""
 
     try:
         raw = await call_ai(prompt, provider=provider, api_key=api_key)
