@@ -512,7 +512,7 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
                 Delete {selectedProjects.size} selected
               </button>
             )}
-            <button onClick={() => { setEditProjectId(null); setEditingProject({ ...EMPTY_PROJECT }); setProjectFormError(""); setSelectedProjects(new Set()); setTimeout(() => projectNameRef.current?.focus(), 50); }} style={{ ...primaryBtn, fontSize: 13 }}>
+            <button onClick={() => { setEditProjectId(null); setEditingProject({ ...EMPTY_PROJECT }); setProjectFormError(""); setSelectedProjects(new Set()); setTimeout(() => { projectNameRef.current?.focus(); projectNameRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }, 50); }} style={{ ...primaryBtn, fontSize: 13 }}>
               + Add Manually
             </button>
           </div>
@@ -710,7 +710,7 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
                           🔗 Link
                         </a>
                       )}
-                      <button onClick={() => { setEditProjectId(p.id); setEditingProject({ ...p }); setProjectFormError(""); setSelectedProjects(new Set()); }}
+                      <button onClick={() => { setEditProjectId(p.id); setEditingProject({ ...p }); setProjectFormError(""); setSelectedProjects(new Set()); setTimeout(() => { projectNameRef.current?.focus(); projectNameRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }, 50); }}
                         style={{ marginLeft: "auto", padding: "3px 10px", fontSize: 11, background: "#f8fafc", color: "#475569", border: "1px solid #e2e8f0", borderRadius: 4, cursor: "pointer" }}>
                         Edit
                       </button>
