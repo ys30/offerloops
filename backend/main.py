@@ -775,18 +775,20 @@ async def suggest_project_outcome(
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e))
     tech = ", ".join(payload.tech_stack) if payload.tech_stack else ""
-    prompt = f"""You are a resume writer. Write a concise, specific outcome/impact statement (1-3 sentences, ~30-50 words) for the following project.
+    prompt = f"""You are a senior technical writer crafting resume-quality project outcomes. Write a 2-sentence outcome/impact statement for this project.
 
 Project: {payload.name}
 Role: {payload.role or "not specified"}
 Description: {payload.description or "not specified"}
 Tech Stack: {tech or "not specified"}
 
+Sentence 1: the headline quantified result — lead with a time reduction (before/after), percentage gain, or scale (N users, N teams, N departments). Use ~ for estimates; commit to a number rather than vague qualifiers like "significantly" or "greatly".
+Sentence 2: what capability or visibility that unlocked for stakeholders — what can they now do or see that they couldn't before?
+
 Rules:
-- Focus on RESULTS and IMPACT: deployments, users, time saved, accuracy, publications, adoption, performance gains
-- Include numbers or scale wherever reasonable (% improvement, N users, N datasets, etc.)
-- If exact metrics are unknown, use realistic estimates for this type of project (e.g. "reduced processing time by ~40%")
+- If exact metrics are unknown, estimate realistically based on the project type (e.g. replacing email handoffs → ~40–60% time reduction)
 - Do NOT invent facts that contradict the description
+- Cut adjectives that don't carry information (innovative, powerful, robust)
 - Output only the outcome text — no labels, no bullet points"""
     try:
         result = await call_ai(prompt, provider=provider, api_key=api_key, max_tokens=200)
@@ -843,17 +845,17 @@ Return ONLY valid JSON (no markdown) with these keys:
   "name": "concise project title (5 words max)",
   "dates": "time period e.g. 2022–2024 or empty string",
   "role": "your title on this project + what you personally owned (e.g. 'Lead Data Scientist — owned end-to-end pipeline design, model validation, and stakeholder delivery')",
-  "description": "2-3 sentences that tell the story: what problem existed and why it mattered → what you built and how → who it serves. Use strong, specific verbs (built, modeled, integrated, deployed, automated). Lead with the problem or the scale to create immediate gravity. Do NOT start every sentence with 'I'. Do NOT use filler phrases like 'a tool that', 'a system to', or 'in order to'. Example: 'Federal agencies lacked a scalable method to translate CMIP6 climate projections into county-level economic risk estimates. Built an end-to-end geospatial pipeline integrating multi-model ensemble data with socioeconomic indicators, surfaced through an interactive R Shiny dashboard. Now used by 3 agencies for national climate adaptation planning.'",
+  "description": "2-3 sentences. Follow this arc: (1) what was consolidated or designed and for whom, (2) what you specifically architected — name the concrete components (portal, workspaces, forms, dashboards, pipelines, models), (3) the transformation it created (what messy/manual/fragmented thing became structured/auditable/scalable). Use strong specific verbs: consolidated, architected, standardized, deployed, integrated, transformed. Do NOT start with 'I'. Do NOT use filler phrases ('a tool that', 'a system to', 'in order to'). Example: 'Designed a campus-wide service management system for UNMLA, consolidating Facilities, IT, HR, Marketing, Purchasing, and Room Rental into a unified Smartsheet platform. Architected a centralized portal, 6 department workspaces, standardized intake forms, and lifecycle dashboards — transforming ad hoc request handling into a structured, auditable operational dataset supporting cross-unit reporting and accountability.'",
   "tech_stack": ["real technologies only — languages, frameworks, libraries, platforms; no generic words like 'data', 'analysis', 'modeling'"],
-  "outcome": "the most impressive measurable result: scale, adoption, accuracy gain, time saved, publications, policy impact. Use specific numbers; use ~ for estimates. Example: 'Adopted by 12 research teams across 4 institutions; cut reporting time by ~40% and cited in 2 EPA policy briefs.'",
+  "outcome": "2 sentences. Sentence 1: the headline quantified result — use time reduction with before/after (e.g. 'reduced X from ~3 weeks to ~1 week'), or percentage gain (~50%), or scale (N departments, N users, N publications). Sentence 2: what capability or visibility that unlocked for stakeholders. Use ~ for estimates; commit to numbers rather than vague qualifiers. Example: 'Unified 6 campus departments onto a single platform; reduced request-to-resolution time by ~50% (from ~2–3 weeks to under 1 week) by eliminating email-based handoffs. Gave ~40 staff and administrators real-time visibility into service volumes, backlogs, and request ownership across 7 workflow stages.'",
   "url": "any URL found in the document or empty string"
 }}
 
 Rules:
-- make the reader feel the significance of the project in the first sentence
-- use ~ for estimates, but commit to numbers — "~3x faster" beats "significantly faster"
-- extract only facts from the document; infer reasonable scale estimates where the doc implies but doesn't state
-- cut adjectives that don't carry information (innovative, powerful, robust, cutting-edge)"""
+- description must feel like it was written about the project, not filled into a template
+- outcome must lead with a number — if the doc doesn't state one, use ~ to estimate based on context
+- cut adjectives that don't carry information (innovative, powerful, robust, cutting-edge)
+- extract only facts from the document; use ~ for reasonable inferences"""
 
     try:
         raw = await call_ai(prompt, provider=provider, api_key=api_key)
