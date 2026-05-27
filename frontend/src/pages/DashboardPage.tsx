@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchDashboard, fetchPatterns, fetchStories, deleteStory } from "../api";
+import { fetchDashboard, fetchPatterns, fetchStories } from "../api";
 import type { PatternRow, Story } from "../api";
 
 interface Funnel { interested: number; applied: number; responded: number; interview: number; offer: number; rejected: number }
@@ -30,7 +30,7 @@ const STATUS_META: Record<string, { label: string; color: string; emoji: string 
   interested:   { label: "Interested",    color: "#6366f1", emoji: "⭐" },
 };
 
-export default function DashboardPage({ onSelectJob }: { onSelectJob: (id: string) => void }) {
+export default function DashboardPage({ onSelectJob, onStories }: { onSelectJob: (id: string) => void; onStories?: () => void }) {
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -351,63 +351,75 @@ export default function DashboardPage({ onSelectJob }: { onSelectJob: (id: strin
       )}
 
       {/* ── Story Bank ───────────────────────────────────────── */}
-      {stories.length > 0 && (
-        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "18px 20px", marginBottom: 16 }}>
-          <h2 style={sectionTitle}>📖 Interview Story Bank ({stories.length})</h2>
-          <p style={{ fontSize: 12, color: "#94a3b8", margin: "0 0 14px" }}>
-            Your saved STAR stories — add more from any job detail page.
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {stories.map(s => {
-              const isOpen = expandedStory === s.id;
-              return (
-                <div key={s.id} style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
-                  <button
-                    onClick={() => setExpandedStory(isOpen ? null : s.id)}
-                    style={{ width: "100%", padding: "10px 14px", background: isOpen ? "#f5f3ff" : "#fff",
-                      border: "none", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 10 }}
-                  >
-                    <span style={{ fontSize: 14 }}>📖</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>{s.title}</div>
-                      {s.job_company && (
-                        <div style={{ fontSize: 11, color: "#94a3b8" }}>{s.job_company}{s.job_title ? ` — ${s.job_title}` : ""}</div>
-                      )}
-                    </div>
-                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                      {s.skills.slice(0, 3).map(sk => (
-                        <span key={sk} style={{ fontSize: 10, background: "#ede9fe", color: "#6d28d9", borderRadius: 99, padding: "2px 7px", fontWeight: 600 }}>{sk}</span>
-                      ))}
-                    </div>
-                    <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 8 }}>{isOpen ? "▲" : "▼"}</span>
-                  </button>
-                  {isOpen && (
-                    <div style={{ padding: "0 14px 14px" }}>
-                      {[["Situation", s.situation], ["Task", s.task], ["Action", s.action], ["Result", s.result]].map(([label, text]) =>
-                        text ? (
-                          <div key={label as string} style={{ marginTop: 10, fontSize: 13 }}>
-                            <span style={{ fontWeight: 700, color: "#6366f1" }}>{label}: </span>
-                            <span style={{ color: "#374151" }}>{text}</span>
-                          </div>
-                        ) : null
-                      )}
-                      <button
-                        onClick={async () => { await deleteStory(s.id); setStories(prev => prev.filter(x => x.id !== s.id)); }}
-                        style={{ marginTop: 12, fontSize: 12, color: "#dc2626", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-                      >
-                        Delete story
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <div style={{ marginTop: 10, fontSize: 11, color: "#94a3b8" }}>
-            To add stories, open any job → scroll to "STAR Stories" section.
-          </div>
+      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "18px 20px", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <h2 style={{ ...sectionTitle, margin: 0 }}>📖 Interview Story Bank</h2>
+          <button
+            onClick={onStories}
+            style={{ padding: "6px 14px", background: "#7c3aed", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}
+          >
+            Open Story Bank →
+          </button>
         </div>
-      )}
+        {stories.length === 0 ? (
+          <div style={{ fontSize: 13, color: "#94a3b8" }}>
+            No stories yet. Click "Open Story Bank" to add or AI-generate STAR stories from your resume.
+          </div>
+        ) : (
+          <>
+            <p style={{ fontSize: 12, color: "#94a3b8", margin: "0 0 12px" }}>
+              {stories.length} stories in pool · {stories.filter(s => s.linked_job_ids?.length > 0).length} linked to jobs
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {stories.slice(0, 5).map(s => {
+                const isOpen = expandedStory === s.id;
+                return (
+                  <div key={s.id} style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
+                    <button
+                      onClick={() => setExpandedStory(isOpen ? null : s.id)}
+                      style={{ width: "100%", padding: "10px 14px", background: isOpen ? "#f5f3ff" : "#fff",
+                        border: "none", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 10 }}
+                    >
+                      <span style={{ fontSize: 14 }}>📖</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>{s.title}</div>
+                        <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                          {s.linked_job_ids?.length > 0 ? `🔗 ${s.linked_job_ids.length} job${s.linked_job_ids.length !== 1 ? "s" : ""}` : "not linked"}
+                          {s.ai_polished ? " · ✨ polished" : ""}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        {s.skills.slice(0, 3).map(sk => (
+                          <span key={sk} style={{ fontSize: 10, background: "#ede9fe", color: "#6d28d9", borderRadius: 99, padding: "2px 7px", fontWeight: 600 }}>{sk}</span>
+                        ))}
+                      </div>
+                      <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 8 }}>{isOpen ? "▲" : "▼"}</span>
+                    </button>
+                    {isOpen && (
+                      <div style={{ padding: "0 14px 14px" }}>
+                        {(["Situation", "Task", "Action", "Result"] as const).map(label => {
+                          const text = s[label.toLowerCase() as "situation" | "task" | "action" | "result"];
+                          return text ? (
+                            <div key={label} style={{ marginTop: 10, fontSize: 13 }}>
+                              <span style={{ fontWeight: 700, color: "#6366f1" }}>{label}: </span>
+                              <span style={{ color: "#374151" }}>{text}</span>
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {stories.length > 5 && (
+              <button onClick={onStories} style={{ marginTop: 10, fontSize: 12, color: "#7c3aed", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                View all {stories.length} stories →
+              </button>
+            )}
+          </>
+        )}
+      </div>
 
       {/* ── Compensation Intelligence ─────────────────────────── */}
       <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "18px 20px" }}>

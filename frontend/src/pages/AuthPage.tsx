@@ -33,7 +33,7 @@ export default function AuthModal({ onAuth, onClose, resetToken }: Props) {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
-  const [configured, setConfigured] = useState<Record<string, boolean>>({});
+  const [configured, setConfigured] = useState<Record<string, boolean | string | undefined>>({});
   const [googleClientId, setGoogleClientId] = useState<string | undefined>(
     import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
   );

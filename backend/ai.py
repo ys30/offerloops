@@ -288,6 +288,23 @@ def _pick_provider(preferred: str, api_key: Optional[str]) -> tuple[str, str]:
     raise ValueError("No AI provider configured. Set at least one API key in .env.")
 
 
+async def call_ai(
+    prompt: str,
+    provider: str = "nvidia",
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+    max_tokens: int = 2048,
+) -> str:
+    """General-purpose AI call — returns raw text. Used by story generate/polish."""
+    resolved_provider, resolved_key = _pick_provider(provider, api_key)
+    resolved_model = model or PROVIDERS[resolved_provider]["default_model"]
+    return await _call_provider(
+        resolved_provider, resolved_model,
+        "You are a helpful career coach assistant.", prompt,
+        resolved_key, max_tokens=max_tokens,
+    )
+
+
 async def parse_search_query(
     query: str,
     provider: str = "anthropic",

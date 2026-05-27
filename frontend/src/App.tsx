@@ -12,6 +12,7 @@ import AuthPage from "./pages/AuthPage";
 import TrackerPage from "./pages/TrackerPage";
 import DashboardPage from "./pages/DashboardPage";
 import MarketPage from "./pages/MarketPage";
+import StoryBankPage from "./pages/StoryBankPage";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -26,6 +27,7 @@ export default function App() {
   const [showTracker, setShowTracker] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
   const [showMarket, setShowMarket] = useState(false);
+  const [showStories, setShowStories] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -125,9 +127,10 @@ export default function App() {
   // Shared header props — same nav on every page
   const headerProps = {
     stats, user,
-    onProfile:   () => { setShowProfile(true); setShowDashboard(false); setShowMarket(false); setShowTracker(false); },
-    onDashboard: () => { setShowDashboard(true); setShowProfile(false); setShowMarket(false); setShowTracker(false); },
-    onMarket:    () => { setShowMarket(true); setShowProfile(false); setShowDashboard(false); setShowTracker(false); },
+    onProfile:   () => { setShowProfile(true); setShowDashboard(false); setShowMarket(false); setShowTracker(false); setShowStories(false); },
+    onDashboard: () => { setShowDashboard(true); setShowProfile(false); setShowMarket(false); setShowTracker(false); setShowStories(false); },
+    onMarket:    () => { setShowMarket(true); setShowProfile(false); setShowDashboard(false); setShowTracker(false); setShowStories(false); },
+    onStories:   () => { setShowStories(true); setShowProfile(false); setShowDashboard(false); setShowMarket(false); setShowTracker(false); },
     onLogout:    handleLogout,
     onSignIn:    () => setShowAuthModal(true),
   };
@@ -163,7 +166,7 @@ export default function App() {
         {showAuthModal && <AuthPage onAuth={handleAuth} onClose={() => { setShowAuthModal(false); setResetToken(null); }} resetToken={resetToken} />}
         <Header {...headerProps} dashboardActive />
         <main style={{ ...mainStyle, maxWidth: 1140 }}>
-          <DashboardPage onSelectJob={id => { setShowDashboard(false); setSelectedId(id); }} />
+          <DashboardPage onSelectJob={id => { setShowDashboard(false); setSelectedId(id); }} onStories={() => { setShowStories(true); setShowDashboard(false); }} />
         </main>
       </div>
     );
@@ -176,6 +179,18 @@ export default function App() {
         <Header {...headerProps} marketActive />
         <main style={{ ...mainStyle, maxWidth: 1140 }}>
           <MarketPage onBack={() => setShowMarket(false)} />
+        </main>
+      </div>
+    );
+  }
+
+  if (showStories) {
+    return (
+      <div style={pageStyle}>
+        {showAuthModal && <AuthPage onAuth={handleAuth} onClose={() => { setShowAuthModal(false); setResetToken(null); }} resetToken={resetToken} />}
+        <Header {...headerProps} storiesActive />
+        <main style={{ ...mainStyle, maxWidth: 900 }}>
+          <StoryBankPage onBack={() => setShowStories(false)} />
         </main>
       </div>
     );
@@ -333,7 +348,7 @@ export default function App() {
   );
 }
 
-function Header({ stats, user, onProfile, onLogout, onSignIn, onDashboard, onMarket, profileActive, dashboardActive, marketActive }: {
+function Header({ stats, user, onProfile, onLogout, onSignIn, onDashboard, onMarket, onStories, profileActive, dashboardActive, marketActive, storiesActive }: {
   stats: Stats | null;
   user: User | null;
   onProfile: () => void;
@@ -341,9 +356,11 @@ function Header({ stats, user, onProfile, onLogout, onSignIn, onDashboard, onMar
   onSignIn: () => void;
   onDashboard: () => void;
   onMarket: () => void;
+  onStories: () => void;
   profileActive?: boolean;
   dashboardActive?: boolean;
   marketActive?: boolean;
+  storiesActive?: boolean;
 }) {
   const navBtn = (active?: boolean): React.CSSProperties => ({
     padding: "5px 14px", fontSize: 12, fontWeight: 600, borderRadius: 6, cursor: "pointer",
@@ -366,6 +383,7 @@ function Header({ stats, user, onProfile, onLogout, onSignIn, onDashboard, onMar
         <button onClick={onProfile} style={navBtn(profileActive)}>👤 My Profile</button>
         <button onClick={onDashboard} style={navBtn(dashboardActive)}>📊 Dashboard</button>
         <button onClick={onMarket} style={navBtn(marketActive)}>🌐 Market</button>
+        <button onClick={onStories} style={navBtn(storiesActive)}>📚 Stories</button>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
         {stats && (

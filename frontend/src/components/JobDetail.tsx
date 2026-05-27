@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { EmailEvent, Job } from "../types";
-import { analyzeJob, createStory, deleteStory, fetchEmailEvents, fetchStories, generateApplicationPack, getToken, updateJobStatus } from "../api";
+import { analyzeJob, createStory, fetchEmailEvents, generateApplicationPack, getToken, linkStory, recommendStories, unlinkStory, updateJobStatus } from "../api";
 import type { Story } from "../api";
 import ApplicationPack from "./ApplicationPack";
 
@@ -54,38 +54,49 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // STAR stories
+  // STAR stories — pool model with recommendations
   const [stories, setStories] = useState<Story[]>([]);
   const [showStoryForm, setShowStoryForm] = useState(false);
   const [storyDraft, setStoryDraft] = useState({ title: "", situation: "", task: "", action: "", result: "", skills: "" });
   const [savingStory, setSavingStory] = useState(false);
+  const [linkingId, setLinkingId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (getToken()) fetchStories(job.id).then(setStories).catch(() => null);
+    if (getToken()) recommendStories(job.id).then(setStories).catch(() => null);
   }, [job.id]);
 
   async function handleSaveStory() {
     setSavingStory(true);
     try {
       const s = await createStory({
-        job_id: job.id,
         title: storyDraft.title,
         situation: storyDraft.situation,
         task: storyDraft.task,
         action: storyDraft.action,
         result: storyDraft.result,
         skills: storyDraft.skills.split(",").map(s => s.trim()).filter(Boolean),
+        linked_job_ids: [job.id],
+        ai_polished: false,
       });
-      setStories(prev => [s, ...prev]);
+      setStories(prev => [{ ...s, linked: true, relevance_score: 0 }, ...prev]);
       setStoryDraft({ title: "", situation: "", task: "", action: "", result: "", skills: "" });
       setShowStoryForm(false);
     } catch { /* ignore */ }
     finally { setSavingStory(false); }
   }
 
-  async function handleDeleteStory(id: string) {
-    await deleteStory(id);
-    setStories(prev => prev.filter(s => s.id !== id));
+  async function handleToggleLink(s: Story) {
+    setLinkingId(s.id);
+    try {
+      if (s.linked) {
+        const updated = await unlinkStory(s.id, job.id);
+        setStories(prev => prev.map(x => x.id === s.id ? { ...updated, linked: false, relevance_score: x.relevance_score } : x));
+      } else {
+        const updated = await linkStory(s.id, job.id);
+        setStories(prev => prev.map(x => x.id === s.id ? { ...updated, linked: true, relevance_score: x.relevance_score } : x));
+      }
+    } catch { /* ignore */ }
+    finally { setLinkingId(null); }
   }
 
   async function persist(overrides: { status?: string; notes?: string; appliedDate?: string } = {}) {
@@ -379,26 +390,34 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
           />
         )}
 
-        {/* STAR Story Bank */}
+        {/* STAR Story Bank — pool model */}
         {getToken() && (
           <section style={{ marginTop: 24, padding: 16, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-              <div style={{ fontWeight: 700, fontSize: 14, color: "#1e293b" }}>📖 STAR Stories ({stories.length})</div>
-              <button onClick={() => setShowStoryForm(v => !v)} style={btnStyle("#6366f1", "#fff")}>
-                {showStoryForm ? "Cancel" : "+ Add Story"}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "#1e293b" }}>
+                📖 STAR Stories
+                <span style={{ fontWeight: 400, fontSize: 12, color: "#64748b", marginLeft: 8 }}>
+                  {stories.filter(s => s.linked).length} linked · {stories.length} recommended from pool
+                </span>
+              </div>
+              <button onClick={() => setShowStoryForm(v => !v)} style={{ ...btnStyle("#6366f1", "#fff"), marginTop: 0 }}>
+                {showStoryForm ? "Cancel" : "+ New Story"}
               </button>
+            </div>
+            <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 12 }}>
+              Link stories from your pool to this job, or create a new one below.
             </div>
 
             {showStoryForm && (
               <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: 14, marginBottom: 14 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, color: "#374151", marginBottom: 10 }}>New STAR Story</div>
+                <div style={{ fontWeight: 600, fontSize: 13, color: "#374151", marginBottom: 10 }}>New Story → Added to Pool & Linked</div>
                 {[
-                  { key: "title", label: "Story Title", placeholder: "e.g. Led cross-team data pipeline migration" },
+                  { key: "title", label: "Title", placeholder: "e.g. Led wildfire risk modeling project" },
                   { key: "situation", label: "Situation", placeholder: "What was the context?" },
                   { key: "task", label: "Task", placeholder: "What were you responsible for?" },
                   { key: "action", label: "Action", placeholder: "What did you do specifically?" },
-                  { key: "result", label: "Result", placeholder: "What was the outcome? Include metrics if possible." },
-                  { key: "skills", label: "Skills (comma-separated)", placeholder: "Python, SQL, stakeholder management" },
+                  { key: "result", label: "Result", placeholder: "What was the outcome? Include metrics!" },
+                  { key: "skills", label: "Skills (comma-separated)", placeholder: "Python, GIS, stakeholder management" },
                 ].map(({ key, label, placeholder }) => (
                   <div key={key} style={{ marginBottom: 10 }}>
                     <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 3 }}>{label}</label>
@@ -412,37 +431,82 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
                   </div>
                 ))}
                 <button onClick={handleSaveStory} disabled={!storyDraft.title || savingStory} style={btnStyle("#6366f1", "#fff")}>
-                  {savingStory ? "Saving…" : "Save Story"}
+                  {savingStory ? "Saving…" : "Save & Link to This Job"}
                 </button>
               </div>
             )}
 
-            {stories.length === 0 && !showStoryForm && (
-              <div style={{ fontSize: 13, color: "#94a3b8" }}>No stories yet. Add a STAR story to prepare for interviews.</div>
-            )}
-            {stories.map(s => (
-              <div key={s.id} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, marginBottom: 8 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: "#1e293b" }}>{s.title}</div>
-                  <button onClick={() => handleDeleteStory(s.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 16 }}>×</button>
-                </div>
-                {s.skills.length > 0 && (
-                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", margin: "6px 0" }}>
-                    {s.skills.map(sk => (
-                      <span key={sk} style={{ fontSize: 10, background: "#ede9fe", color: "#6d28d9", borderRadius: 99, padding: "2px 8px", fontWeight: 600 }}>{sk}</span>
-                    ))}
-                  </div>
-                )}
-                {[["Situation", s.situation], ["Task", s.task], ["Action", s.action], ["Result", s.result]].map(([label, text]) =>
-                  text ? (
-                    <div key={label as string} style={{ fontSize: 12, marginTop: 6 }}>
-                      <span style={{ fontWeight: 700, color: "#6366f1" }}>{label}: </span>
-                      <span style={{ color: "#374151" }}>{text}</span>
-                    </div>
-                  ) : null
-                )}
+            {stories.length === 0 && !showStoryForm ? (
+              <div style={{ fontSize: 13, color: "#94a3b8" }}>
+                No stories in your pool yet. Go to 📚 Stories to add some, or create one here.
               </div>
-            ))}
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {stories.map(s => {
+                  const isLinked = !!s.linked;
+                  const isLinking = linkingId === s.id;
+                  return (
+                    <div key={s.id} style={{
+                      background: "#fff",
+                      border: `1px solid ${isLinked ? "#a5b4fc" : "#e2e8f0"}`,
+                      borderRadius: 8, padding: 12,
+                      opacity: isLinking ? 0.6 : 1,
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                            <span style={{ fontWeight: 700, fontSize: 13, color: "#1e293b" }}>{s.title}</span>
+                            {isLinked && (
+                              <span style={{ fontSize: 11, background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", borderRadius: 99, padding: "1px 7px" }}>
+                                🔗 linked
+                              </span>
+                            )}
+                            {s.ai_polished && (
+                              <span style={{ fontSize: 11, background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0", borderRadius: 99, padding: "1px 7px" }}>
+                                ✨ polished
+                              </span>
+                            )}
+                            {s.relevance_score !== undefined && s.relevance_score > 0 && (
+                              <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                                relevance: {s.relevance_score}
+                              </span>
+                            )}
+                          </div>
+                          {s.skills?.length > 0 && (
+                            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 5 }}>
+                              {s.skills.map(sk => (
+                                <span key={sk} style={{ fontSize: 10, background: "#ede9fe", color: "#6d28d9", borderRadius: 99, padding: "2px 8px", fontWeight: 600 }}>{sk}</span>
+                              ))}
+                            </div>
+                          )}
+                          {[["Situation", s.situation], ["Task", s.task], ["Action", s.action], ["Result", s.result]].map(([label, text]) =>
+                            text ? (
+                              <div key={label as string} style={{ fontSize: 12, marginTop: 5 }}>
+                                <span style={{ fontWeight: 700, color: "#6366f1" }}>{label}: </span>
+                                <span style={{ color: "#374151" }}>{text}</span>
+                              </div>
+                            ) : null
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleToggleLink(s)}
+                          disabled={isLinking}
+                          style={{
+                            padding: "4px 12px", fontSize: 12, fontWeight: 600,
+                            border: `1px solid ${isLinked ? "#fca5a5" : "#a5b4fc"}`,
+                            borderRadius: 6, cursor: "pointer", flexShrink: 0,
+                            background: isLinked ? "#fef2f2" : "#eff6ff",
+                            color: isLinked ? "#dc2626" : "#2563eb",
+                          }}
+                        >
+                          {isLinking ? "…" : isLinked ? "Unlink" : "Link"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
         )}
       </div>

@@ -303,18 +303,22 @@ export async function fetchEmailEvents(jobId?: string): Promise<EmailEvent[]> {
 export interface Story {
   id: string;
   user_id: string;
-  job_id?: string;
-  job_title?: string;
-  job_company?: string;
   title: string;
   situation?: string;
   task?: string;
   action?: string;
   result?: string;
   skills: string[];
+  linked_job_ids: string[];
+  ai_polished: boolean;
   created_at?: string;
   updated_at?: string;
+  // from recommend endpoint
+  relevance_score?: number;
+  linked?: boolean;
 }
+
+export type StoryPayload = Omit<Story, "id" | "user_id" | "created_at" | "updated_at" | "relevance_score" | "linked">;
 
 export async function fetchStories(jobId?: string): Promise<Story[]> {
   const qs = jobId ? `?job_id=${jobId}` : "";
@@ -323,7 +327,7 @@ export async function fetchStories(jobId?: string): Promise<Story[]> {
   return res.json();
 }
 
-export async function createStory(payload: Omit<Story, "id" | "user_id" | "job_title" | "job_company" | "created_at" | "updated_at">): Promise<Story> {
+export async function createStory(payload: Partial<StoryPayload>): Promise<Story> {
   const res = await fetch(`${BASE}/stories`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -333,7 +337,7 @@ export async function createStory(payload: Omit<Story, "id" | "user_id" | "job_t
   return res.json();
 }
 
-export async function updateStory(id: string, payload: Omit<Story, "id" | "user_id" | "job_title" | "job_company" | "created_at" | "updated_at">): Promise<Story> {
+export async function updateStory(id: string, payload: Partial<StoryPayload>): Promise<Story> {
   const res = await fetch(`${BASE}/stories/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -345,4 +349,55 @@ export async function updateStory(id: string, payload: Omit<Story, "id" | "user_
 
 export async function deleteStory(id: string): Promise<void> {
   await fetch(`${BASE}/stories/${id}`, { method: "DELETE", headers: authHeaders() });
+}
+
+export async function generateStories(
+  provider = "nvidia",
+  apiKey?: string,
+): Promise<Story[]> {
+  const res = await fetch(`${BASE}/stories/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ provider, api_key: apiKey }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function polishStory(
+  id: string,
+  provider = "nvidia",
+  apiKey?: string,
+): Promise<Story> {
+  const res = await fetch(`${BASE}/stories/${id}/polish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ provider, api_key: apiKey }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function recommendStories(jobId: string): Promise<Story[]> {
+  const res = await fetch(`${BASE}/stories/recommend?job_id=${jobId}`, { headers: authHeaders() });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function linkStory(storyId: string, jobId: string): Promise<Story> {
+  const res = await fetch(`${BASE}/stories/${storyId}/link?job_id=${jobId}`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function unlinkStory(storyId: string, jobId: string): Promise<Story> {
+  const res = await fetch(`${BASE}/stories/${storyId}/link?job_id=${jobId}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
 }

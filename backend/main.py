@@ -404,61 +404,40 @@ def get_patterns(user_id: str = Depends(_require_user), db: Session = Depends(ge
 
 class StoryIn(BaseModel):
     title: str
-    job_id: Optional[str] = None
     situation: Optional[str] = None
     task: Optional[str] = None
     action: Optional[str] = None
     result: Optional[str] = None
     skills: list[str] = []
-
-class StoryOut(BaseModel):
-    id: str
-    user_id: str
-    job_id: Optional[str] = None
-    job_title: Optional[str] = None
-    job_company: Optional[str] = None
-    title: str
-    situation: Optional[str] = None
-    task: Optional[str] = None
-    action: Optional[str] = None
-    result: Optional[str] = None
-    skills: list[str] = []
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
 
 def _story_out(row: StoryRow) -> dict:
     import json as _j
     return {
         "id": row.id, "user_id": row.user_id,
-        "job_id": row.job_id, "job_title": row.job_title, "job_company": row.job_company,
         "title": row.title,
-        "situation": row.situation, "task": row.task, "action": row.action, "result": row.result,
+        "situation": row.situation, "task": row.task,
+        "action": row.action, "result": row.result,
         "skills": _j.loads(row.skills or "[]"),
+        "linked_job_ids": _j.loads(row.linked_job_ids or "[]"),
+        "ai_polished": row.ai_polished or False,
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
 
 @app.get("/api/stories", tags=["stories"])
-def list_stories(job_id: Optional[str] = Query(None), user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
-    q = db.query(StoryRow).filter(StoryRow.user_id == user_id)
-    if job_id:
-        q = q.filter(StoryRow.job_id == job_id)
-    return [_story_out(r) for r in q.order_by(StoryRow.updated_at.desc()).all()]
+def list_stories(user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    rows = db.query(StoryRow).filter(StoryRow.user_id == user_id).order_by(StoryRow.updated_at.desc()).all()
+    return [_story_out(r) for r in rows]
 
 @app.post("/api/stories", tags=["stories"])
 def create_story(payload: StoryIn, user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
     import json as _j, uuid as _u
-    job_title, job_company = None, None
-    if payload.job_id:
-        row = db.get(JobRow, payload.job_id)
-        if row:
-            job_title, job_company = row.title, row.company
     story = StoryRow(
         id=str(_u.uuid4()), user_id=user_id,
-        job_id=payload.job_id, job_title=job_title, job_company=job_company,
         title=payload.title, situation=payload.situation, task=payload.task,
         action=payload.action, result=payload.result,
         skills=_j.dumps(payload.skills),
+        linked_job_ids="[]",
     )
     db.add(story)
     db.commit()
@@ -487,6 +466,132 @@ def delete_story(story_id: str, user_id: str = Depends(_require_user), db: Sessi
     db.delete(row)
     db.commit()
     return {"ok": True}
+
+@app.post("/api/stories/{story_id}/link", tags=["stories"])
+def link_story_to_job(story_id: str, job_id: str = Query(...), user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    import json as _j
+    row = db.get(StoryRow, story_id)
+    if not row or row.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Story not found")
+    ids = _j.loads(row.linked_job_ids or "[]")
+    if job_id not in ids:
+        ids.append(job_id)
+        row.linked_job_ids = _j.dumps(ids)
+        db.commit()
+    return _story_out(row)
+
+@app.delete("/api/stories/{story_id}/link", tags=["stories"])
+def unlink_story_from_job(story_id: str, job_id: str = Query(...), user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    import json as _j
+    row = db.get(StoryRow, story_id)
+    if not row or row.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Story not found")
+    ids = [i for i in _j.loads(row.linked_job_ids or "[]") if i != job_id]
+    row.linked_job_ids = _j.dumps(ids)
+    db.commit()
+    return _story_out(row)
+
+@app.post("/api/stories/generate", tags=["stories"])
+async def generate_stories(
+    provider: str = Query("nvidia"),
+    api_key: Optional[str] = Query(None),
+    user_id: str = Depends(_require_user),
+    db: Session = Depends(get_db),
+):
+    """Generate STAR story drafts from the user's saved resume."""
+    from .profile import get_profile
+    from .ai import call_ai
+    profile = get_profile(db, user_id)
+    if not profile or not profile.resume_text:
+        raise HTTPException(status_code=422, detail="Upload your resume on the Profile page first.")
+    prompt = f"""Based on this resume, generate 4 distinct STAR interview stories covering different experiences and skills.
+
+Resume:
+{profile.resume_text[:4000]}
+
+Return a JSON array of objects with keys: title, situation, task, action, result, skills (array of 3-5 skill strings).
+Only return the JSON array, no other text."""
+    import json as _j, uuid as _u
+    raw = await call_ai(prompt, provider=provider, api_key=api_key)
+    try:
+        start = raw.index("[")
+        end = raw.rindex("]") + 1
+        drafts = _j.loads(raw[start:end])
+    except Exception:
+        raise HTTPException(status_code=500, detail="AI returned invalid JSON. Try again.")
+    stories = []
+    for d in drafts[:5]:
+        row = StoryRow(
+            id=str(_u.uuid4()), user_id=user_id,
+            title=d.get("title", "Untitled"),
+            situation=d.get("situation"), task=d.get("task"),
+            action=d.get("action"), result=d.get("result"),
+            skills=_j.dumps(d.get("skills", [])),
+            linked_job_ids="[]",
+            ai_polished=True,
+        )
+        db.add(row)
+        stories.append(_story_out(row))
+    db.commit()
+    return stories
+
+@app.post("/api/stories/{story_id}/polish", tags=["stories"])
+async def polish_story(
+    story_id: str,
+    provider: str = Query("nvidia"),
+    api_key: Optional[str] = Query(None),
+    user_id: str = Depends(_require_user),
+    db: Session = Depends(get_db),
+):
+    """AI-polish a STAR story for clarity, impact, and metrics."""
+    from .ai import call_ai
+    import json as _j
+    row = db.get(StoryRow, story_id)
+    if not row or row.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Story not found")
+    prompt = f"""Polish this STAR interview story for maximum impact. Make it concise, specific, and metrics-driven. Keep the same facts but improve clarity and punch.
+
+Title: {row.title}
+Situation: {row.situation or ""}
+Task: {row.task or ""}
+Action: {row.action or ""}
+Result: {row.result or ""}
+
+Return JSON with keys: title, situation, task, action, result (strings only). No other text."""
+    raw = await call_ai(prompt, provider=provider, api_key=api_key)
+    try:
+        start = raw.index("{")
+        end = raw.rindex("}") + 1
+        polished = _j.loads(raw[start:end])
+    except Exception:
+        raise HTTPException(status_code=500, detail="AI returned invalid JSON. Try again.")
+    row.title = polished.get("title", row.title)
+    row.situation = polished.get("situation", row.situation)
+    row.task = polished.get("task", row.task)
+    row.action = polished.get("action", row.action)
+    row.result = polished.get("result", row.result)
+    row.ai_polished = True
+    db.commit()
+    return _story_out(row)
+
+@app.get("/api/stories/recommend", tags=["stories"])
+def recommend_stories(job_id: str = Query(...), user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    """Return stories from pool ranked by keyword overlap with a job."""
+    import json as _j
+    job = db.get(JobRow, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job_text = f"{job.title} {job.description or ''} {job.tags or ''}".lower()
+    job_words = set(w for w in job_text.split() if len(w) > 4)
+    rows = db.query(StoryRow).filter(StoryRow.user_id == user_id).all()
+    scored = []
+    for r in rows:
+        story_text = f"{r.title} {r.situation or ''} {r.task or ''} {r.action or ''} {r.result or ''} {r.skills or ''}".lower()
+        overlap = len(job_words & set(story_text.split()))
+        linked = job_id in _j.loads(r.linked_job_ids or "[]")
+        scored.append({**_story_out(r), "relevance_score": overlap, "linked": linked})
+    scored.sort(key=lambda x: (x["linked"], x["relevance_score"]), reverse=True)
+    return scored
 
 
 # ── Ingestion ────────────────────────────────────────────────────────

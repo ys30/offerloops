@@ -141,15 +141,14 @@ class StoryRow(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(__import__("uuid").uuid4()))
     user_id = Column(String, index=True, nullable=False)
-    job_id = Column(String, nullable=True)       # linked job (optional)
-    job_title = Column(String, nullable=True)    # denormalized for display
-    job_company = Column(String, nullable=True)
-    title = Column(String, nullable=False)       # story headline
+    title = Column(String, nullable=False)
     situation = Column(Text, nullable=True)
     task = Column(Text, nullable=True)
     action = Column(Text, nullable=True)
     result = Column(Text, nullable=True)
     skills = Column(Text, default="[]")          # JSON list of skill tags
+    linked_job_ids = Column(Text, default="[]")  # JSON list of job IDs this story is linked to
+    ai_polished = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
