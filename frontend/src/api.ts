@@ -298,6 +298,54 @@ export async function fetchEmailEvents(jobId?: string): Promise<EmailEvent[]> {
   return res.json();
 }
 
+// ── Projects ──────────────────────────────────────────────────────
+
+export interface Project {
+  id: string;
+  user_id: string;
+  name: string;
+  description?: string;
+  role?: string;
+  tech_stack: string[];
+  outcome?: string;
+  url?: string;
+  dates?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type ProjectPayload = Omit<Project, "id" | "user_id" | "created_at" | "updated_at">;
+
+export async function fetchProjects(): Promise<Project[]> {
+  const res = await fetch(`${BASE}/projects`, { headers: authHeaders() });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function createProject(payload: Partial<ProjectPayload>): Promise<Project> {
+  const res = await fetch(`${BASE}/projects`, {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ tech_stack: [], ...payload }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function updateProject(id: string, payload: Partial<ProjectPayload>): Promise<Project> {
+  const res = await fetch(`${BASE}/projects/${id}`, {
+    method: "PATCH",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ tech_stack: [], ...payload }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  await fetch(`${BASE}/projects/${id}`, { method: "DELETE", headers: authHeaders() });
+}
+
 // ── STAR Story Bank ────────────────────────────────────────────────
 
 export interface Story {

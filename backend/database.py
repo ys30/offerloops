@@ -141,6 +141,22 @@ class ProfileRow(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class ProjectRow(Base):
+    __tablename__ = "projects"
+
+    id = Column(String, primary_key=True, default=lambda: str(__import__("uuid").uuid4()))
+    user_id = Column(String, index=True, nullable=False)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    role = Column(Text, nullable=True)
+    tech_stack = Column(Text, default="[]")   # JSON list
+    outcome = Column(Text, nullable=True)
+    url = Column(Text, nullable=True)
+    dates = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class StoryRow(Base):
     __tablename__ = "stories"
 
@@ -247,6 +263,22 @@ def _migrate(conn):
         if col not in pcols2:
             cur.execute(f"ALTER TABLE profiles ADD COLUMN {col} TEXT")
 
+    # ── projects table ───────────────────────────────────────────────────────
+    try:
+        prcols = col_info("projects")
+        for col, typ in {
+            "description": "TEXT",
+            "role":        "TEXT",
+            "tech_stack":  "TEXT DEFAULT '[]'",
+            "outcome":     "TEXT",
+            "url":         "TEXT",
+            "dates":       "TEXT",
+        }.items():
+            if col not in prcols:
+                cur.execute(f"ALTER TABLE projects ADD COLUMN {col} {typ}")
+    except Exception:
+        pass
+
     # ── stories table ────────────────────────────────────────────────────────
     try:
         scols = col_info("stories")
@@ -289,6 +321,20 @@ def _migrate_pg(conn):
         for col in ["github_url", "google_scholar_url", "orcid_url", "website_url", "twitter_url"]:
             if col not in pcols:
                 conn.execute(text(f"ALTER TABLE profiles ADD COLUMN {col} TEXT"))
+        conn.commit()
+    except Exception:
+        pass
+
+    # projects table — add optional columns
+    try:
+        existing_p = {c["name"] for c in inspector.get_columns("projects")}
+        for col, typ in [
+            ("description", "TEXT"), ("role", "TEXT"),
+            ("tech_stack", "TEXT DEFAULT '[]'"), ("outcome", "TEXT"),
+            ("url", "TEXT"), ("dates", "TEXT"),
+        ]:
+            if col not in existing_p:
+                conn.execute(text(f"ALTER TABLE projects ADD COLUMN {col} {typ}"))
         conn.commit()
     except Exception:
         pass

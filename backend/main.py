@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 
 from fastapi import UploadFile, File
-from .database import EmailEventRow, GmailTokenRow, JobRow, ProfileRow, StoryRow, SessionLocal, get_db, init_db
+from .database import EmailEventRow, GmailTokenRow, JobRow, ProfileRow, ProjectRow, StoryRow, SessionLocal, get_db, init_db
 from .auth import (
     apply_new_password, consume_reset_token, create_reset_token, create_token,
     create_user, decode_token, get_user_by_email, get_user_by_id,
@@ -524,7 +524,11 @@ async def generate_stories(
 
     from .links_fetcher import build_links_context
     links_ctx = await build_links_context(profile)
-    extra = f"\n\nAdditional context from profile links:\n{links_ctx}" if links_ctx else ""
+    projects_ctx = _build_projects_context(db, user_id)
+    extra_parts = []
+    if links_ctx: extra_parts.append(f"Additional context from profile links:\n{links_ctx}")
+    if projects_ctx: extra_parts.append(projects_ctx)
+    extra = ("\n\n" + "\n\n".join(extra_parts)) if extra_parts else ""
 
     prompt = f"""Based on this resume, generate 5 distinct STAR+Reflection interview stories, each covering a DIFFERENT category from this list: Leadership, Conflict Resolution, Failure & Learning, Innovation, Research & Analysis, Cross-team Collaboration, Technical Achievement, Optimization. Where relevant, reference specific projects or publications from the additional context.
 
@@ -646,6 +650,92 @@ def recommend_stories(job_id: str = Query(...), user_id: str = Depends(_require_
     return scored
 
 
+# ── Projects ─────────────────────────────────────────────────────────
+
+class ProjectIn(BaseModel):
+    name: str
+    description: Optional[str] = None
+    role: Optional[str] = None
+    tech_stack: list[str] = []
+    outcome: Optional[str] = None
+    url: Optional[str] = None
+    dates: Optional[str] = None
+
+def _project_out(row: ProjectRow) -> dict:
+    import json as _j
+    return {
+        "id": row.id, "user_id": row.user_id,
+        "name": row.name,
+        "description": row.description,
+        "role": row.role,
+        "tech_stack": _j.loads(row.tech_stack or "[]"),
+        "outcome": row.outcome,
+        "url": row.url,
+        "dates": row.dates,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
+
+def _build_projects_context(db, user_id: str) -> str:
+    import json as _j
+    rows = db.query(ProjectRow).filter(ProjectRow.user_id == user_id).order_by(ProjectRow.updated_at.desc()).all()
+    if not rows:
+        return ""
+    lines = ["--- Projects ---"]
+    for r in rows:
+        tech = _j.loads(r.tech_stack or "[]")
+        lines.append(f"\nProject: {r.name}" + (f" ({r.dates})" if r.dates else ""))
+        if r.role: lines.append(f"  Role: {r.role}")
+        if r.description: lines.append(f"  Description: {r.description}")
+        if tech: lines.append(f"  Tech Stack: {', '.join(tech)}")
+        if r.outcome: lines.append(f"  Outcome / Impact: {r.outcome}")
+        if r.url: lines.append(f"  URL: {r.url}")
+    return "\n".join(lines)
+
+@app.get("/api/projects", tags=["projects"])
+def list_projects(user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    rows = db.query(ProjectRow).filter(ProjectRow.user_id == user_id).order_by(ProjectRow.updated_at.desc()).all()
+    return [_project_out(r) for r in rows]
+
+@app.post("/api/projects", tags=["projects"])
+def create_project(payload: ProjectIn, user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    import json as _j, uuid as _u
+    row = ProjectRow(
+        id=str(_u.uuid4()), user_id=user_id,
+        name=payload.name, description=payload.description, role=payload.role,
+        tech_stack=_j.dumps(payload.tech_stack), outcome=payload.outcome,
+        url=payload.url, dates=payload.dates,
+    )
+    db.add(row)
+    db.commit()
+    return _project_out(row)
+
+@app.patch("/api/projects/{project_id}", tags=["projects"])
+def update_project(project_id: str, payload: ProjectIn, user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    import json as _j
+    row = db.get(ProjectRow, project_id)
+    if not row or row.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+    row.name = payload.name
+    if payload.description is not None: row.description = payload.description
+    if payload.role is not None: row.role = payload.role
+    row.tech_stack = _j.dumps(payload.tech_stack)
+    if payload.outcome is not None: row.outcome = payload.outcome
+    if payload.url is not None: row.url = payload.url
+    if payload.dates is not None: row.dates = payload.dates
+    db.commit()
+    return _project_out(row)
+
+@app.delete("/api/projects/{project_id}", tags=["projects"])
+def delete_project(project_id: str, user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    row = db.get(ProjectRow, project_id)
+    if not row or row.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
+
+
 # ── Ingestion ────────────────────────────────────────────────────────
 
 
@@ -739,6 +829,9 @@ async def analyze_job(payload: AnalyzeRequest, user_id: str = Depends(_require_u
         links_ctx = await build_links_context(profile)
         if links_ctx:
             resume_text = resume_text + "\n\n--- Additional context from profile links ---\n" + links_ctx
+    projects_ctx = _build_projects_context(db, user_id)
+    if projects_ctx:
+        resume_text = resume_text + "\n\n" + projects_ctx
 
     try:
         result = await analyze_job_fit(
@@ -795,6 +888,9 @@ async def generate_application_pack(
         links_ctx = await build_links_context(pack_profile)
         if links_ctx:
             resume_text = resume_text + "\n\n--- Additional context from profile links ---\n" + links_ctx
+    projects_ctx = _build_projects_context(db, user_id)
+    if projects_ctx:
+        resume_text = resume_text + "\n\n" + projects_ctx
 
     try:
         provider_used, _ = _pick_provider(payload.provider, payload.api_key)

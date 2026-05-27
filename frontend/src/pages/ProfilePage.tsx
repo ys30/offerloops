@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { disconnectGmail, fetchGmailStatus, getToken, startGmailAuth, syncGmail } from "../api";
+import { disconnectGmail, fetchGmailStatus, getToken, startGmailAuth, syncGmail, fetchProjects, createProject, updateProject, deleteProject, type Project } from "../api";
 import type { GmailStatus } from "../types";
 
 interface Profile {
@@ -75,6 +75,11 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ scanned: number; new_events: number; jobs_updated: number } | null>(null);
 
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [editingProject, setEditingProject] = useState<Partial<Project> | null>(null);
+  const [editProjectId, setEditProjectId] = useState<string | null>(null);
+  const [savingProject, setSavingProject] = useState(false);
+
   useEffect(() => {
     fetchGmailStatus().then(setGmailStatus).catch(() => null);
   }, []);
@@ -107,6 +112,7 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
       setWebsiteUrl(p?.website_url || "");
       setTwitterUrl(p?.twitter_url || "");
     });
+    fetchProjects().then(setProjects).catch(() => null);
   }, []);
 
   const flash = (text: string, ok = true) => {
@@ -187,6 +193,40 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
     } finally {
       setImporting(false);
     }
+  };
+
+  const EMPTY_PROJECT: Partial<Project> = { name: "", description: "", role: "", tech_stack: [], outcome: "", url: "", dates: "" };
+
+  const handleSaveProject = async () => {
+    if (!editingProject?.name?.trim()) return;
+    setSavingProject(true);
+    try {
+      if (editProjectId) {
+        const updated = await updateProject(editProjectId, editingProject as any);
+        setProjects(ps => ps.map(p => p.id === editProjectId ? updated : p));
+      } else {
+        const created = await createProject(editingProject as any);
+        setProjects(ps => [created, ...ps]);
+      }
+      setEditingProject(null);
+      setEditProjectId(null);
+      flash("Project saved.");
+    } catch (e: unknown) {
+      flash(e instanceof Error ? e.message : "Save failed", false);
+    } finally {
+      setSavingProject(false);
+    }
+  };
+
+  const handleDeleteProject = async (id: string) => {
+    if (!confirm("Delete this project?")) return;
+    await deleteProject(id);
+    setProjects(ps => ps.filter(p => p.id !== id));
+    flash("Project deleted.");
+  };
+
+  const setProjectField = (k: keyof Project, v: unknown) => {
+    setEditingProject(p => p ? { ...p, [k]: v } : p);
   };
 
   const handleGmailConnect = () => {
@@ -390,6 +430,123 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
         )}
       </section>
 
+      {/* Projects */}
+      <section style={{ ...card, marginTop: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div>
+            <h2 style={{ ...sectionTitle, margin: 0 }}>Projects</h2>
+            <p style={{ fontSize: 12, color: "#94a3b8", margin: "4px 0 0" }}>
+              AI reads these when generating your resume, cover letter, and STAR stories.
+            </p>
+          </div>
+          <button
+            onClick={() => { setEditProjectId(null); setEditingProject({ ...EMPTY_PROJECT }); }}
+            style={primaryBtn}
+          >
+            + Add Project
+          </button>
+        </div>
+
+        {editingProject && (
+          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "16px", marginBottom: 14 }}>
+            <h3 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: "#1e293b" }}>
+              {editProjectId ? "Edit Project" : "New Project"}
+            </h3>
+            <div style={{ display: "flex", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
+              <div style={{ flex: 2, minWidth: 180 }}>
+                <label style={lbl}>Project Name *</label>
+                <input value={editingProject.name || ""} onChange={e => setProjectField("name", e.target.value)}
+                  placeholder="e.g. RCCDAS Climate Risk Dashboard" style={inp} />
+              </div>
+              <div style={{ flex: 1, minWidth: 140 }}>
+                <label style={lbl}>Dates</label>
+                <input value={editingProject.dates || ""} onChange={e => setProjectField("dates", e.target.value)}
+                  placeholder="e.g. 2022 – 2024" style={inp} />
+              </div>
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={lbl}>Your Role</label>
+              <input value={editingProject.role || ""} onChange={e => setProjectField("role", e.target.value)}
+                placeholder="e.g. Lead Data Scientist — designed pipeline and built dashboard" style={inp} />
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={lbl}>Description <span style={{ color: "#94a3b8", fontWeight: 400 }}>(what it does, what you built)</span></label>
+              <textarea value={editingProject.description || ""} onChange={e => setProjectField("description", e.target.value)}
+                rows={3} placeholder="Describe the project, its purpose, and what you specifically built or contributed…"
+                style={{ ...inp, resize: "vertical", fontFamily: "inherit" }} />
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={lbl}>Tech Stack <span style={{ color: "#94a3b8", fontWeight: 400 }}>(comma-separated)</span></label>
+              <input
+                value={(editingProject.tech_stack || []).join(", ")}
+                onChange={e => setProjectField("tech_stack", e.target.value.split(",").map(s => s.trim()).filter(Boolean))}
+                placeholder="e.g. Python, R, ArcGIS, Shiny, PostgreSQL" style={inp} />
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={lbl}>Outcome / Impact <span style={{ color: "#94a3b8", fontWeight: 400 }}>(results, metrics, publications)</span></label>
+              <textarea value={editingProject.outcome || ""} onChange={e => setProjectField("outcome", e.target.value)}
+                rows={2} placeholder="e.g. Deployed to 3 federal agencies; cited in 2 peer-reviewed papers; reduced analysis time by 60%"
+                style={{ ...inp, resize: "vertical", fontFamily: "inherit" }} />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={lbl}>URL <span style={{ color: "#94a3b8", fontWeight: 400 }}>(GitHub, paper, demo)</span></label>
+              <input value={editingProject.url || ""} onChange={e => setProjectField("url", e.target.value)}
+                placeholder="https://github.com/..." style={inp} />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={handleSaveProject} disabled={savingProject || !editingProject.name?.trim()} style={primaryBtn}>
+                {savingProject ? "Saving…" : "Save Project"}
+              </button>
+              <button onClick={() => { setEditingProject(null); setEditProjectId(null); }} style={secondaryBtn}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {projects.length === 0 && !editingProject ? (
+          <div style={{ textAlign: "center", padding: "28px 0", color: "#94a3b8", fontSize: 13 }}>
+            No projects yet. Add projects to give AI richer context for tailoring your applications.
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {projects.map(p => (
+              <div key={p.id} style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px", background: "#fff" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontWeight: 700, fontSize: 14, color: "#1e293b" }}>{p.name}</span>
+                      {p.dates && <span style={{ fontSize: 11, color: "#64748b" }}>{p.dates}</span>}
+                    </div>
+                    {p.role && <div style={{ fontSize: 12, color: "#475569", marginTop: 3, fontStyle: "italic" }}>{p.role}</div>}
+                    {p.description && <div style={{ fontSize: 12, color: "#334155", marginTop: 5, lineHeight: 1.6 }}>{p.description}</div>}
+                    {p.tech_stack?.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+                        {p.tech_stack.map(t => (
+                          <span key={t} style={{ fontSize: 11, background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: 4, padding: "1px 7px" }}>{t}</span>
+                        ))}
+                      </div>
+                    )}
+                    {p.outcome && <div style={{ fontSize: 12, color: "#15803d", marginTop: 5, background: "#f0fdf4", borderRadius: 5, padding: "4px 8px" }}>📈 {p.outcome}</div>}
+                    {p.url && <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: "#2563eb", marginTop: 4, display: "inline-block" }}>🔗 {p.url}</a>}
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <button onClick={() => { setEditProjectId(p.id); setEditingProject({ ...p }); }}
+                      style={{ padding: "4px 10px", fontSize: 12, background: "#f8fafc", color: "#475569", border: "1px solid #e2e8f0", borderRadius: 5, cursor: "pointer" }}>
+                      Edit
+                    </button>
+                    <button onClick={() => handleDeleteProject(p.id)}
+                      style={{ padding: "4px 10px", fontSize: 12, background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 5, cursor: "pointer" }}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* Resume text editor */}
       <section style={{ ...card, marginTop: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -429,4 +586,7 @@ const primaryBtn: React.CSSProperties = {
 };
 const secondaryBtn: React.CSSProperties = {
   ...primaryBtn, background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0",
+};
+const lbl: React.CSSProperties = {
+  display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4,
 };
