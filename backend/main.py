@@ -833,22 +833,26 @@ async def upload_project_doc(
         raise HTTPException(status_code=422, detail="Could not extract readable text from the file.")
 
     # AI parse into project fields
-    prompt = f"""Extract structured project information from this document.
+    prompt = f"""You are a resume writer. Extract structured project information from this document and write it in sharp, resume-quality language that would impress a hiring manager.
 
 Document text:
 {text[:6000]}
 
 Return ONLY valid JSON (no markdown) with these keys:
 {{
-  "name": "project title",
+  "name": "concise project title (5 words max)",
   "dates": "time period e.g. 2022–2024 or empty string",
-  "role": "the person's specific role and contribution",
-  "description": "2-3 sentences: what the project is, its purpose, what was built",
-  "tech_stack": ["list", "of", "technologies", "tools", "languages"],
-  "outcome": "quantified results, impact, publications, deployments",
+  "role": "1 line: job title + 2-3 specific verbs describing what you did (e.g. 'Lead Data Scientist — designed ML pipeline, built Shiny dashboard, deployed to AWS')",
+  "description": "2 punchy sentences MAX. Start with a strong action verb. Describe WHAT was built, WHY it matters, and WHO uses it. No filler words. Example: 'Engineered a geospatial risk-scoring platform integrating CMIP6 climate projections with socioeconomic data to quantify county-level damage estimates. Deployed as an interactive R Shiny dashboard used by 3 federal agencies for climate adaptation planning.'",
+  "tech_stack": ["only real technologies, tools, languages, frameworks — no generic words like 'data' or 'analysis'"],
+  "outcome": "1-2 sentences with specific numbers: users, time saved, accuracy, publications, scale, adoption. Use ~ for estimates. Example: 'Reduced manual reporting time by ~40%; adopted by 12 research teams across 4 institutions.'",
   "url": "any URL found in the document or empty string"
 }}
-Be specific and concise. Extract only what is stated in the document."""
+
+Rules:
+- description must start with a strong past-tense action verb (Engineered, Designed, Built, Developed, Deployed, Automated, Modeled)
+- every word must earn its place — cut anything vague or generic
+- extract only facts stated in the document; use ~ for reasonable estimates"""
 
     try:
         raw = await call_ai(prompt, provider=provider, api_key=api_key)
