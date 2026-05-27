@@ -17,9 +17,31 @@ function extractError(raw: string): string {
   }
 }
 
+const CATEGORIES = [
+  "Leadership", "Conflict Resolution", "Failure & Learning", "Innovation",
+  "Scaling & Growth", "Optimization", "Research & Analysis",
+  "Cross-team Collaboration", "Stakeholder Management",
+  "Technical Achievement", "Communication", "Problem Solving",
+];
+
+const CATEGORY_COLORS: Record<string, { bg: string; color: string; border: string }> = {
+  "Leadership":              { bg: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe" },
+  "Conflict Resolution":     { bg: "#fefce8", color: "#a16207", border: "#fde68a" },
+  "Failure & Learning":      { bg: "#fef2f2", color: "#b91c1c", border: "#fecaca" },
+  "Innovation":              { bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0" },
+  "Scaling & Growth":        { bg: "#f0f9ff", color: "#0369a1", border: "#bae6fd" },
+  "Optimization":            { bg: "#fff7ed", color: "#c2410c", border: "#fed7aa" },
+  "Research & Analysis":     { bg: "#faf5ff", color: "#7e22ce", border: "#e9d5ff" },
+  "Cross-team Collaboration":{ bg: "#fff1f2", color: "#be123c", border: "#fecdd3" },
+  "Stakeholder Management":  { bg: "#f0fdfa", color: "#0f766e", border: "#99f6e4" },
+  "Technical Achievement":   { bg: "#f8fafc", color: "#334155", border: "#e2e8f0" },
+  "Communication":           { bg: "#fdfce8", color: "#854d0e", border: "#fef08a" },
+  "Problem Solving":         { bg: "#f5f3ff", color: "#6d28d9", border: "#ddd6fe" },
+};
+
 const EMPTY: Partial<Story> = {
-  title: "", situation: "", task: "", action: "", result: "",
-  skills: [], linked_job_ids: [], ai_polished: false,
+  title: "", situation: "", task: "", action: "", result: "", reflection: "",
+  category: "", skills: [], linked_job_ids: [], ai_polished: false,
 };
 
 export default function StoryBankPage({ onBack }: Props) {
@@ -32,6 +54,7 @@ export default function StoryBankPage({ onBack }: Props) {
   const [saving, setSaving] = useState(false);
   const [provider, setProvider] = useState("nvidia");
   const [apiKey, setApiKey] = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
 
   useEffect(() => { load(); }, []);
 
@@ -125,6 +148,37 @@ export default function StoryBankPage({ onBack }: Props) {
         </div>
       )}
 
+      {/* Category filter chips */}
+      {stories.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+          <button
+            onClick={() => setFilterCategory("")}
+            style={{ ...chipBtn, ...(filterCategory === "" ? chipActive : {}) }}
+          >
+            All ({stories.length})
+          </button>
+          {CATEGORIES.filter(c => stories.some(s => s.category === c)).map(c => {
+            const clr = CATEGORY_COLORS[c] || CATEGORY_COLORS["Technical Achievement"];
+            const count = stories.filter(s => s.category === c).length;
+            const active = filterCategory === c;
+            return (
+              <button
+                key={c}
+                onClick={() => setFilterCategory(active ? "" : c)}
+                style={{
+                  padding: "3px 10px", fontSize: 11, borderRadius: 12, cursor: "pointer", fontWeight: 600,
+                  background: active ? clr.color : clr.bg,
+                  color: active ? "#fff" : clr.color,
+                  border: `1px solid ${clr.border}`,
+                }}
+              >
+                {c} ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Action bar */}
       <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
         <button onClick={startNew} style={primaryBtn}>+ New Story</button>
@@ -158,13 +212,28 @@ export default function StoryBankPage({ onBack }: Props) {
           <h3 style={{ margin: "0 0 14px", fontSize: 15, fontWeight: 700, color: "#1e293b" }}>
             {editId ? "Edit Story" : "New Story"}
           </h3>
-          <label style={labelStyle}>Title *</label>
-          <input
-            value={editing.title || ""}
-            onChange={e => setField("title", e.target.value)}
-            placeholder="e.g. Led wildfire risk modeling project"
-            style={{ ...inputStyle, marginBottom: 12 }}
-          />
+          <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: 2, minWidth: 200 }}>
+              <label style={labelStyle}>Title *</label>
+              <input
+                value={editing.title || ""}
+                onChange={e => setField("title", e.target.value)}
+                placeholder="e.g. Led wildfire risk modeling project"
+                style={inputStyle}
+              />
+            </div>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <label style={labelStyle}>Category</label>
+              <select
+                value={editing.category || ""}
+                onChange={e => setField("category", e.target.value)}
+                style={{ ...inputStyle, background: "#fff" }}
+              >
+                <option value="">— Select —</option>
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
           {(["situation", "task", "action", "result"] as const).map(field => (
             <div key={field}>
               <label style={labelStyle}>
@@ -184,6 +253,18 @@ export default function StoryBankPage({ onBack }: Props) {
               />
             </div>
           ))}
+          <div>
+            <label style={labelStyle}>
+              Reflection
+              <span style={{ color: "#94a3b8", fontWeight: 400, marginLeft: 6, fontSize: 11 }}>(What did you learn? What would you do differently?)</span>
+            </label>
+            <textarea
+              value={(editing.reflection as string) || ""}
+              onChange={e => setField("reflection", e.target.value)}
+              rows={2}
+              style={{ ...inputStyle, resize: "vertical", marginBottom: 12, background: "#fffbeb" }}
+            />
+          </div>
           <label style={labelStyle}>
             Skills / Tags
             <span style={{ color: "#94a3b8", fontWeight: 400, marginLeft: 6, fontSize: 11 }}>(comma-separated)</span>
@@ -206,26 +287,35 @@ export default function StoryBankPage({ onBack }: Props) {
       )}
 
       {/* Story list */}
-      {stories.length === 0 && !editing ? (
-        <div style={{ textAlign: "center", padding: "48px 0", color: "#94a3b8" }}>
-          <div style={{ fontSize: 36, marginBottom: 12 }}>📖</div>
-          <div style={{ fontSize: 14 }}>No stories yet.</div>
-          <div style={{ fontSize: 13, marginTop: 4 }}>Add one manually or click "AI Generate from Resume".</div>
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {stories.map(s => (
-            <StoryCard
-              key={s.id}
-              story={s}
-              polishing={polishingId === s.id}
-              onEdit={() => startEdit(s)}
-              onDelete={() => remove(s.id)}
-              onPolish={() => handlePolish(s.id)}
-            />
-          ))}
-        </div>
-      )}
+      {(() => {
+        const visible = filterCategory ? stories.filter(s => s.category === filterCategory) : stories;
+        if (stories.length === 0 && !editing) return (
+          <div style={{ textAlign: "center", padding: "48px 0", color: "#94a3b8" }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>📖</div>
+            <div style={{ fontSize: 14 }}>No stories yet.</div>
+            <div style={{ fontSize: 13, marginTop: 4 }}>Add one manually or click "AI Generate from Resume".</div>
+          </div>
+        );
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {visible.map(s => (
+              <StoryCard
+                key={s.id}
+                story={s}
+                polishing={polishingId === s.id}
+                onEdit={() => startEdit(s)}
+                onDelete={() => remove(s.id)}
+                onPolish={() => handlePolish(s.id)}
+              />
+            ))}
+            {visible.length === 0 && filterCategory && (
+              <div style={{ textAlign: "center", padding: "32px 0", color: "#94a3b8", fontSize: 13 }}>
+                No stories in "{filterCategory}" yet.
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -245,6 +335,14 @@ function StoryCard({ story, polishing, onEdit, onDelete, onPolish }: {
         <div style={{ flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <span style={{ fontWeight: 700, fontSize: 14, color: "#1e293b" }}>{story.title}</span>
+            {story.category && (() => {
+              const clr = CATEGORY_COLORS[story.category] || CATEGORY_COLORS["Technical Achievement"];
+              return (
+                <span style={{ fontSize: 11, background: clr.bg, color: clr.color, border: `1px solid ${clr.border}`, borderRadius: 10, padding: "1px 8px", fontWeight: 600 }}>
+                  {story.category}
+                </span>
+              );
+            })()}
             {story.ai_polished && (
               <span style={{ fontSize: 11, background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0", borderRadius: 10, padding: "1px 8px" }}>
                 ✨ AI polished
@@ -264,13 +362,19 @@ function StoryCard({ story, polishing, onEdit, onDelete, onPolish }: {
             </div>
           )}
           {expanded && (
-            <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
               {(["situation", "task", "action", "result"] as const).map(field => story[field] ? (
                 <div key={field}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.5 }}>{field}</span>
                   <p style={{ margin: "4px 0 0", fontSize: 13, color: "#334155", lineHeight: 1.6 }}>{story[field]}</p>
                 </div>
               ) : null)}
+              {story.reflection && (
+                <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "8px 12px" }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#92400e", textTransform: "uppercase", letterSpacing: 0.5 }}>Reflection</span>
+                  <p style={{ margin: "4px 0 0", fontSize: 13, color: "#78350f", lineHeight: 1.6 }}>{story.reflection}</p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -351,4 +455,13 @@ const aiSmallBtn: React.CSSProperties = {
 
 const dangerSmallBtn: React.CSSProperties = {
   ...smallBtn, background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca",
+};
+
+const chipBtn: React.CSSProperties = {
+  padding: "3px 10px", fontSize: 11, borderRadius: 12, cursor: "pointer",
+  background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0", fontWeight: 500,
+};
+
+const chipActive: React.CSSProperties = {
+  background: "#1e293b", color: "#fff", border: "1px solid #1e293b",
 };

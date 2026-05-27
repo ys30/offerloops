@@ -154,6 +154,8 @@ class StoryRow(Base):
     skills = Column(Text, default="[]")          # JSON list of skill tags
     linked_job_ids = Column(Text, default="[]")  # JSON list of job IDs this story is linked to
     ai_polished = Column(Boolean, default=False)
+    category = Column(Text, default="")
+    reflection = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -251,6 +253,8 @@ def _migrate(conn):
         for col, typ in {
             "linked_job_ids": "TEXT DEFAULT '[]'",
             "ai_polished":    "BOOLEAN DEFAULT 0",
+            "category":       "TEXT DEFAULT ''",
+            "reflection":     "TEXT",
         }.items():
             if col not in scols:
                 cur.execute(f"ALTER TABLE stories ADD COLUMN {col} {typ}")
@@ -296,6 +300,10 @@ def _migrate_pg(conn):
             conn.execute(text("ALTER TABLE stories ADD COLUMN linked_job_ids TEXT DEFAULT '[]'"))
         if "ai_polished" not in existing:
             conn.execute(text("ALTER TABLE stories ADD COLUMN ai_polished BOOLEAN DEFAULT FALSE"))
+        if "category" not in existing:
+            conn.execute(text("ALTER TABLE stories ADD COLUMN category TEXT DEFAULT ''"))
+        if "reflection" not in existing:
+            conn.execute(text("ALTER TABLE stories ADD COLUMN reflection TEXT"))
         conn.commit()
     except Exception:
         pass  # table may not exist yet; create_all handles it

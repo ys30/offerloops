@@ -402,12 +402,21 @@ def get_patterns(user_id: str = Depends(_require_user), db: Session = Depends(ge
 
 # ── STAR Story Bank ──────────────────────────────────────────────────
 
+STORY_CATEGORIES = [
+    "Leadership", "Conflict Resolution", "Failure & Learning", "Innovation",
+    "Scaling & Growth", "Optimization", "Research & Analysis",
+    "Cross-team Collaboration", "Stakeholder Management", "Technical Achievement",
+    "Communication", "Problem Solving",
+]
+
 class StoryIn(BaseModel):
     title: str
     situation: Optional[str] = None
     task: Optional[str] = None
     action: Optional[str] = None
     result: Optional[str] = None
+    reflection: Optional[str] = None
+    category: str = ""
     skills: list[str] = []
     linked_job_ids: list[str] = []
 
@@ -419,6 +428,8 @@ def _story_out(row: StoryRow) -> dict:
         "title": row.title,
         "situation": row.situation, "task": row.task,
         "action": row.action, "result": row.result,
+        "reflection": getattr(row, "reflection", None),
+        "category": getattr(row, "category", "") or "",
         "skills": _j.loads(row.skills or "[]"),
         "linked_job_ids": _j.loads(linked_raw or "[]"),
         "ai_polished": getattr(row, "ai_polished", False) or False,
@@ -438,6 +449,7 @@ def create_story(payload: StoryIn, user_id: str = Depends(_require_user), db: Se
         id=str(_u.uuid4()), user_id=user_id,
         title=payload.title, situation=payload.situation, task=payload.task,
         action=payload.action, result=payload.result,
+        reflection=payload.reflection, category=payload.category,
         skills=_j.dumps(payload.skills),
         linked_job_ids=_j.dumps(payload.linked_job_ids),
     )
@@ -456,6 +468,8 @@ def update_story(story_id: str, payload: StoryIn, user_id: str = Depends(_requir
     if payload.task is not None: row.task = payload.task
     if payload.action is not None: row.action = payload.action
     if payload.result is not None: row.result = payload.result
+    if payload.reflection is not None: row.reflection = payload.reflection
+    row.category = payload.category
     row.skills = _j.dumps(payload.skills)
     row.linked_job_ids = _j.dumps(payload.linked_job_ids)
     db.commit()
@@ -512,12 +526,21 @@ async def generate_stories(
     links_ctx = await build_links_context(profile)
     extra = f"\n\nAdditional context from profile links:\n{links_ctx}" if links_ctx else ""
 
-    prompt = f"""Based on this resume, generate 4 distinct STAR interview stories covering different experiences and skills. Where relevant, reference specific projects or publications from the additional context.
+    prompt = f"""Based on this resume, generate 5 distinct STAR+Reflection interview stories, each covering a DIFFERENT category from this list: Leadership, Conflict Resolution, Failure & Learning, Innovation, Research & Analysis, Cross-team Collaboration, Technical Achievement, Optimization. Where relevant, reference specific projects or publications from the additional context.
 
 Resume:
 {profile.resume_text[:4000]}{extra}
 
-Return a JSON array of objects with keys: title, situation, task, action, result, skills (array of 3-5 skill strings).
+Rules:
+- Each story must cover a genuinely different category — no repeats
+- situation: 2-3 sentences of context
+- task: 1-2 sentences on your specific responsibility
+- action: 3-4 sentences of specific steps YOU took (no "we")
+- result: 1-2 sentences with quantified outcomes where possible
+- reflection: 1-2 sentences — what you learned, what you'd do differently, or how it shaped your approach
+- category: must be one of the listed categories exactly
+
+Return a JSON array of objects with keys: title, category, situation, task, action, result, reflection, skills (array of 3-5 skill strings).
 Only return the JSON array, no other text."""
     import json as _j, uuid as _u
     try:
@@ -539,6 +562,7 @@ Only return the JSON array, no other text."""
             title=d.get("title", "Untitled"),
             situation=d.get("situation"), task=d.get("task"),
             action=d.get("action"), result=d.get("result"),
+            reflection=d.get("reflection"), category=d.get("category", ""),
             skills=_j.dumps(d.get("skills", [])),
             linked_job_ids="[]",
             ai_polished=True,
@@ -562,15 +586,23 @@ async def polish_story(
     row = db.get(StoryRow, story_id)
     if not row or row.user_id != user_id:
         raise HTTPException(status_code=404, detail="Story not found")
-    prompt = f"""Polish this STAR interview story for maximum impact. Make it concise, specific, and metrics-driven. Keep the same facts but improve clarity and punch.
+    prompt = f"""Polish this STAR+Reflection interview story for maximum impact. Make it concise, specific, and metrics-driven. Keep the same facts but improve clarity, punch, and add quantified results where possible.
 
 Title: {row.title}
+Category: {getattr(row, "category", "") or ""}
 Situation: {row.situation or ""}
 Task: {row.task or ""}
 Action: {row.action or ""}
 Result: {row.result or ""}
+Reflection: {getattr(row, "reflection", "") or ""}
 
-Return JSON with keys: title, situation, task, action, result (strings only). No other text."""
+Rules:
+- action: use strong past-tense verbs, be specific about what YOU did
+- result: include numbers, percentages, or scale wherever truthful
+- reflection: 1-2 sentences on what you learned or how it shaped your approach
+- Keep category unchanged
+
+Return JSON with keys: title, category, situation, task, action, result, reflection (strings only). No other text."""
     try:
         raw = await call_ai(prompt, provider=provider, api_key=api_key)
     except ValueError as e:
@@ -588,6 +620,8 @@ Return JSON with keys: title, situation, task, action, result (strings only). No
     row.task = polished.get("task", row.task)
     row.action = polished.get("action", row.action)
     row.result = polished.get("result", row.result)
+    if polished.get("reflection"): row.reflection = polished["reflection"]
+    if polished.get("category"): row.category = polished["category"]
     row.ai_polished = True
     db.commit()
     return _story_out(row)

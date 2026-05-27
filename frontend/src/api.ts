@@ -308,6 +308,8 @@ export interface Story {
   task?: string;
   action?: string;
   result?: string;
+  reflection?: string;
+  category: string;
   skills: string[];
   linked_job_ids: string[];
   ai_polished: boolean;
