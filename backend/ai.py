@@ -273,7 +273,8 @@ STRUCTURE (4 tight paragraphs):
 
 RULES:
 - ~280–320 words total — strictly one page when printed
-- Use the candidate's actual name, companies, and achievements — never generic placeholders
+- Write in FIRST PERSON ("I", "my", "me") — NEVER third person ("he/she", the candidate's name)
+- Use the candidate's actual companies and achievements — never generic placeholders
 - Vary sentence structure; avoid repetitive openings ("I have", "I am", "My experience")
 - Every sentence must be specific: no vague claims like "I am passionate about" or "I bring strong skills"
 - Professional but human tone — not stiff or bureaucratic
