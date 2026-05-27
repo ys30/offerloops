@@ -85,6 +85,7 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
   const [aiKey, setAiKey] = useState("");
   const [projectFormError, setProjectFormError] = useState("");
   const [suggestingOutcome, setSuggestingOutcome] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const projectFileRef = useRef<HTMLInputElement>(null);
   const projectNameRef = useRef<HTMLInputElement>(null);
 
@@ -278,12 +279,15 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingDoc(true);
+    setUploadError("");
     try {
       const project = await uploadProjectDoc(file, aiProvider, aiKey || undefined);
       setProjects(ps => [project, ...ps]);
+      setUploadError("");
       flash(`"${project.name}" extracted and added.`);
     } catch (err: unknown) {
-      flash(err instanceof Error ? err.message : "Upload failed", false);
+      const msg = err instanceof Error ? err.message : "Upload failed";
+      setUploadError(msg);
     } finally {
       setUploadingDoc(false);
       if (projectFileRef.current) projectFileRef.current.value = "";
@@ -544,6 +548,16 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
           </div>
           <input ref={projectFileRef} type="file" accept=".pdf,.docx,.doc,.txt,.md"
             onChange={handleProjectDocUpload} style={{ display: "none" }} />
+          {uploadError && (
+            <div style={{ marginTop: 10, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 12px", fontSize: 12, color: "#dc2626" }}>
+              ⚠ {uploadError}
+              {uploadError.includes("API key") || uploadError.includes("provider") ? (
+                <div style={{ marginTop: 4, color: "#7f1d1d", fontSize: 11 }}>
+                  Enter your API key in the field above, or configure one on the server.
+                </div>
+              ) : null}
+            </div>
+          )}
         </div>
 
         {/* Edit / New form */}

@@ -20,6 +20,19 @@ async function safeDetail(res: Response, fallback: string): Promise<string> {
   }
 }
 
+async function extractDetail(res: Response): Promise<string> {
+  try {
+    const text = await res.text();
+    const obj = JSON.parse(text);
+    const d = obj.detail;
+    if (typeof d === "string") return d;
+    if (Array.isArray(d)) return d.map((e: { msg?: string }) => e.msg ?? JSON.stringify(e)).join("; ");
+    return text;
+  } catch {
+    return `HTTP ${res.status}`;
+  }
+}
+
 export async function signup(payload: {
   email: string; password: string; name?: string; phone?: string; location?: string;
 }): Promise<{ token: string; user: User }> {
@@ -363,10 +376,7 @@ export async function suggestProjectOutcome(
       tech_stack: Array.isArray(project.tech_stack) ? project.tech_stack : [],
     }),
   });
-  if (!res.ok) {
-    const body = await res.text();
-    try { throw new Error(JSON.parse(body).detail); } catch { throw new Error(body); }
-  }
+  if (!res.ok) throw new Error(await extractDetail(res));
   const data = await res.json();
   return data.outcome;
 }
@@ -385,10 +395,7 @@ export async function uploadProjectDoc(
     headers: authHeaders(),
     body: form,
   });
-  if (!res.ok) {
-    const body = await res.text();
-    try { throw new Error(JSON.parse(body).detail); } catch { throw new Error(body); }
-  }
+  if (!res.ok) throw new Error(await extractDetail(res));
   return res.json();
 }
 
