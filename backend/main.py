@@ -1047,6 +1047,42 @@ async def import_linkedin(url: str = Query(...), user_id: str = Depends(_require
     return _profile_out(row)
 
 
+class PasteImportIn(BaseModel):
+    text: str
+    linkedin_url: Optional[str] = None
+
+
+@app.post("/api/profile/paste", response_model=ProfileOut, tags=["profile"])
+async def import_pasted_text(
+    payload: PasteImportIn,
+    user_id: str = Depends(_require_user),
+    db: Session = Depends(get_db),
+):
+    """Accept pasted LinkedIn (or any) profile text and AI-format it into resume text."""
+    from .profile import upsert_profile
+    from .ai import _pick_provider, _call_provider, PROVIDERS
+    raw = payload.text.strip()
+    if not raw:
+        raise HTTPException(status_code=422, detail="No text provided.")
+    try:
+        provider, key = _pick_provider("nvidia", None)
+        model = PROVIDERS[provider]["default_model"]
+        system = (
+            "Convert the following profile or resume text into a clean, structured resume in plain text. "
+            "Extract and organize: name, contact info, summary, work experience with dates and bullets, "
+            "education, skills. Remove navigation text, ads, and irrelevant web page content. "
+            "Output plain text only, no markdown."
+        )
+        structured = await _call_provider(provider, model, system, raw[:6000], key)
+    except Exception:
+        structured = raw  # fall back to raw text if AI unavailable
+    kwargs: dict = {"resume_text": structured}
+    if payload.linkedin_url:
+        kwargs["linkedin_url"] = payload.linkedin_url
+    row = upsert_profile(db, user_id=user_id, **kwargs)
+    return _profile_out(row)
+
+
 # ── Auth ─────────────────────────────────────────────────────────────
 
 

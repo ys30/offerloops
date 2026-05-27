@@ -64,6 +64,7 @@ export default function ProfilePage({ onBack }: { onBack: () => void }) {
   const [orcidUrl, setOrcidUrl] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [twitterUrl, setTwitterUrl] = useState("");
+  const [linkedinPasteText, setLinkedinPasteText] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -142,6 +143,28 @@ export default function ProfilePage({ onBack }: { onBack: () => void }) {
       setProfile(p);
       setEditResume(p.resume_text || "");
       flash("LinkedIn profile imported.");
+    } catch (err: unknown) {
+      flash(err instanceof Error ? err.message : String(err), false);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleLinkedInPaste = async () => {
+    if (!linkedinPasteText.trim()) return;
+    setImporting(true);
+    try {
+      const res = await fetch("/api/profile/paste", {
+        method: "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ text: linkedinPasteText, linkedin_url: linkedinUrl || undefined }),
+      });
+      if (!res.ok) throw new Error((await res.json()).detail ?? "Import failed");
+      const p: Profile = await res.json();
+      setProfile(p);
+      setEditResume(p.resume_text || "");
+      setLinkedinPasteText("");
+      flash("Profile imported and formatted with AI.");
     } catch (err: unknown) {
       flash(err instanceof Error ? err.message : String(err), false);
     } finally {
@@ -232,23 +255,31 @@ export default function ProfilePage({ onBack }: { onBack: () => void }) {
         <input ref={fileRef} type="file" accept=".pdf,.docx,.doc,.txt,.md" onChange={handleUpload} style={{ display: "none" }} />
       </section>
 
-      {/* LinkedIn import */}
+      {/* LinkedIn paste import */}
       <section style={{ ...card, marginTop: 16 }}>
         <h2 style={sectionTitle}>Import from LinkedIn</h2>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input
-            style={{ ...inp, flex: 1 }}
-            placeholder="https://www.linkedin.com/in/your-profile"
-            value={linkedinUrl}
-            onChange={e => setLinkedinUrl(e.target.value)}
-          />
-          <button onClick={handleLinkedIn} disabled={importing || !linkedinUrl.trim()} style={primaryBtn}>
-            {importing ? "Importing…" : "Import Resume Text"}
-          </button>
-        </div>
-        <p style={{ fontSize: 11, color: "#94a3b8", margin: "6px 0 0" }}>
-          Scrapes your LinkedIn page and converts it to resume text. If blocked, export from LinkedIn Settings → Data Privacy → Get a copy of your data, then upload the PDF above.
+        <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 12px" }}>
+          LinkedIn blocks automatic scraping. Instead, copy your profile text manually and paste it below — AI will format it into a clean resume.
         </p>
+        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px", marginBottom: 12, fontSize: 12, color: "#475569", lineHeight: 1.7 }}>
+          <strong>How to copy your LinkedIn profile:</strong><br />
+          1. Open your LinkedIn profile in a browser<br />
+          2. Select all text on the page (<kbd style={{ background: "#e2e8f0", borderRadius: 3, padding: "1px 5px" }}>Ctrl+A</kbd> or <kbd style={{ background: "#e2e8f0", borderRadius: 3, padding: "1px 5px" }}>Cmd+A</kbd>), then copy (<kbd style={{ background: "#e2e8f0", borderRadius: 3, padding: "1px 5px" }}>Ctrl+C</kbd>)<br />
+          3. Paste into the box below and click "Format with AI"
+        </div>
+        <textarea
+          style={{ ...inp, resize: "vertical", fontFamily: "inherit", fontSize: 12 }}
+          rows={6}
+          placeholder="Paste your LinkedIn profile text here…"
+          value={linkedinPasteText}
+          onChange={e => setLinkedinPasteText(e.target.value)}
+        />
+        <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+          <button onClick={handleLinkedInPaste} disabled={importing || !linkedinPasteText.trim()} style={primaryBtn}>
+            {importing ? "Formatting…" : "✨ Format with AI"}
+          </button>
+          <span style={{ fontSize: 11, color: "#94a3b8" }}>AI cleans up the text into a structured resume</span>
+        </div>
       </section>
 
       {/* Professional links */}
