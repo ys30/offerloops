@@ -202,48 +202,82 @@ async def analyze_job_fit(
     )
 
 
-TAILOR_RESUME_SYSTEM = """You are an expert resume writer. Given a base resume and a job description,
-produce a tailored resume as a JSON object. Rules:
-- Keep all factual information (companies, dates, degrees, names) exactly as-is
-- Reorder bullet points so the most relevant ones come first
-- Rephrase bullets to mirror the job description's language where truthful
-- Do NOT invent or exaggerate anything
-- Output ONLY valid JSON, no markdown fences, matching this schema exactly:
+TAILOR_RESUME_SYSTEM = """You are a world-class resume writer specializing in ATS optimization and executive-level tailoring. Given a base resume and a job description, produce a deeply tailored resume JSON.
+
+RULES — follow every one:
+1. FACTS: Never invent companies, dates, degrees, or credentials. Keep all factual details exactly as given.
+2. BULLETS: Write 4–6 achievement bullets per role. Every bullet must:
+   - Start with a strong past-tense action verb (Engineered, Spearheaded, Automated, Reduced, Designed, Led, Deployed, Modeled, etc.)
+   - Include a quantified result wherever possible (%, $, x faster, N users, N datasets, saved X hours/week)
+   - Mirror keywords and phrases from the job description where truthful
+   - Describe IMPACT, not just tasks ("Reduced model runtime by 40%" not "Used Python for modeling")
+3. SUMMARY: Write a 3–4 sentence targeted summary that opens with the candidate's strongest relevant credential, names the exact role/domain, and calls out 2–3 differentiating strengths matching the JD.
+4. SKILLS: Extract and prioritize skills that appear in the job description. Group as: Programming, Data & Analytics, Domain Expertise, Tools & Platforms.
+5. PROJECTS: If the resume or additional context mentions relevant projects (GitHub, publications, tools built), include a "projects" array.
+6. KEYWORDS: Add an "ats_keywords" array of 10–15 exact terms from the JD that are present in the resume (for ATS scanning).
+7. Output ONLY valid JSON, no markdown, matching this schema exactly:
 {
   "name": "Full Name",
   "email": "email@example.com",
   "phone": "",
   "location": "City, State",
   "linkedin": "",
-  "summary": "2-3 sentence tailored professional summary",
+  "github": "",
+  "summary": "3-4 sentence tailored summary with specific credentials and role alignment",
   "experience": [
     {
       "title": "Job Title",
       "company": "Company Name",
       "dates": "Jan 2020 – Present",
-      "bullets": ["achievement 1", "achievement 2"]
+      "bullets": [
+        "Led X initiative resulting in Y% improvement in Z metric",
+        "Engineered automated pipeline processing N datasets, reducing manual effort by X hours/week",
+        "Collaborated with cross-functional team of N stakeholders to deliver X outcome"
+      ]
     }
   ],
   "education": [
     {
-      "degree": "M.S. Environmental Science",
+      "degree": "Ph.D. in Ecology",
       "school": "University Name",
-      "year": "2020",
-      "notes": ""
+      "year": "2019",
+      "notes": "Dissertation: title; relevant coursework or honors"
     }
   ],
-  "skills": ["Python", "GIS", "SQL"]
+  "projects": [
+    {
+      "name": "Project Name",
+      "description": "1–2 sentence description with tech stack and impact"
+    }
+  ],
+  "skills": {
+    "Programming": ["Python", "R", "SQL"],
+    "Data & Analytics": ["Machine Learning", "Time-Series Analysis", "Geospatial Analysis"],
+    "Domain Expertise": ["Carbon Pricing", "GHG Accounting", "Climate Modeling"],
+    "Tools & Platforms": ["ArcGIS", "Power BI", "geopandas", "rasterio"]
+  },
+  "ats_keywords": ["keyword1", "keyword2"]
 }"""
 
-COVER_LETTER_SYSTEM = """You are an expert career coach and cover letter writer.
-Given a resume and a job description, write a compelling, personalized cover letter.
-Rules:
-- 3-4 paragraphs, professional but warm tone
-- Opening: why THIS role at THIS company excites the candidate
-- Middle: 2-3 specific achievements from the resume that directly match the job
-- Closing: call to action, enthusiasm
-- No generic phrases like 'I am writing to apply for...'
-- Output plain text only, no markdown"""
+COVER_LETTER_SYSTEM = """You are a senior career coach who writes cover letters that get interviews at competitive organizations. Write a deeply personalized, compelling cover letter that stands out from generic applications.
+
+STRUCTURE (5 paragraphs, ~400–500 words total):
+
+1. HOOK (2–3 sentences): Open with a specific, compelling reason why THIS candidate is uniquely suited for THIS role at THIS organization. Reference something specific about the company's mission, a recent initiative, or a direct alignment between the candidate's most relevant achievement and a key job requirement. Never start with "I am writing to apply."
+
+2. EVIDENCE PARAGRAPH 1 (3–4 sentences): Describe the candidate's single most relevant achievement or project in detail. Include specific technologies used, scale/scope, and measurable outcome. Connect it directly to a requirement in the job description.
+
+3. EVIDENCE PARAGRAPH 2 (3–4 sentences): Describe a second distinct strength — ideally from a different area (e.g., if paragraph 1 was technical, paragraph 2 could be leadership, communication, or domain expertise). Again: specific, quantified, connected to the JD.
+
+4. ALIGNMENT (2–3 sentences): Explain what draws the candidate specifically to this organization — its mission, its approach, its impact. Show genuine knowledge of the employer. Explain how the candidate's values or career goals align.
+
+5. CLOSING (2 sentences): Confident call to action. Express enthusiasm and availability.
+
+RULES:
+- Use the candidate's actual name, companies, and achievements from the resume — never generic placeholders
+- Vary sentence structure; avoid repetitive openings ("I have", "I am", "My experience")
+- Professional but human tone — not stiff or bureaucratic
+- Output plain text only, no markdown, no headers"""
 
 
 async def tailor_resume(
@@ -257,8 +291,8 @@ async def tailor_resume(
     """Return structured resume as a dict."""
     resolved_provider, resolved_key = _pick_provider(provider, api_key)
     resolved_model = model or PROVIDERS[resolved_provider]["default_model"]
-    user_msg = f"Job Title: {job_title}\n\nJob Description:\n{job_description[:4000]}\n\nBase Resume:\n{resume_text[:3000]}\n\nOutput the tailored resume JSON:"
-    raw = await _call_provider(resolved_provider, resolved_model, TAILOR_RESUME_SYSTEM, user_msg, resolved_key)
+    user_msg = f"Job Title: {job_title}\n\nJob Description:\n{job_description[:6000]}\n\nBase Resume:\n{resume_text[:5000]}\n\nOutput the tailored resume JSON:"
+    raw = await _call_provider(resolved_provider, resolved_model, TAILOR_RESUME_SYSTEM, user_msg, resolved_key, max_tokens=3000)
     return json.loads(_strip_json(raw))
 
 
@@ -273,8 +307,8 @@ async def generate_cover_letter(
 ) -> str:
     resolved_provider, resolved_key = _pick_provider(provider, api_key)
     resolved_model = model or PROVIDERS[resolved_provider]["default_model"]
-    user_msg = f"Job Title: {job_title}\nCompany: {company}\n\nJob Description:\n{job_description[:3000]}\n\nResume:\n{resume_text[:2500]}\n\nWrite the cover letter:"
-    return await _call_provider(resolved_provider, resolved_model, COVER_LETTER_SYSTEM, user_msg, resolved_key)
+    user_msg = f"Job Title: {job_title}\nCompany: {company}\n\nJob Description:\n{job_description[:4000]}\n\nResume:\n{resume_text[:3500]}\n\nWrite the cover letter:"
+    return await _call_provider(resolved_provider, resolved_model, COVER_LETTER_SYSTEM, user_msg, resolved_key, max_tokens=2000)
 
 
 def _pick_provider(preferred: str, api_key: Optional[str]) -> tuple[str, str]:

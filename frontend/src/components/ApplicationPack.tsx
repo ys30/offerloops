@@ -4,10 +4,13 @@ interface ResumeData {
   phone?: string;
   location?: string;
   linkedin?: string;
+  github?: string;
   summary?: string;
   experience?: { title: string; company: string; dates: string; bullets: string[] }[];
   education?: { degree: string; school: string; year: string; notes?: string }[];
-  skills?: string[];
+  skills?: string[] | Record<string, string[]>;
+  projects?: { name: string; description: string }[];
+  ats_keywords?: string[];
 }
 
 interface PackResult {
@@ -46,8 +49,23 @@ function buildResumeHTML(data: ResumeData, jobTitle: string, company: string): s
       ${e.notes ? `<div style="font-size:12px;color:#555">${e.notes}</div>` : ""}
     </div>`).join("");
 
-  const skillsHTML = (data.skills || []).length
-    ? `<div class="skills-list">${(data.skills || []).map(s => `<span class="skill-tag">${s}</span>`).join("")}</div>`
+  const skillsHTML = (() => {
+    const s = data.skills;
+    if (!s || (Array.isArray(s) && !s.length)) return "";
+    if (Array.isArray(s)) {
+      return `<div class="skills-list">${s.map(x => `<span class="skill-tag">${x}</span>`).join("")}</div>`;
+    }
+    return Object.entries(s).map(([group, items]) =>
+      `<div class="skill-group"><strong style="font-size:12px;color:#444">${group}:</strong> ${items.map(x => `<span class="skill-tag">${x}</span>`).join("")}</div>`
+    ).join("");
+  })();
+
+  const projectsHTML = (data.projects || []).length
+    ? (data.projects || []).map(p => `
+    <div class="exp-item">
+      <div class="exp-title">${p.name}</div>
+      <div style="font-size:12.5px;color:#333;margin-top:3px">${p.description}</div>
+    </div>`).join("")
     : "";
 
   return `<!DOCTYPE html>
@@ -72,6 +90,7 @@ function buildResumeHTML(data: ResumeData, jobTitle: string, company: string): s
   .edu-item { margin-bottom: 8px; display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px; }
   .skills-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .skill-tag { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 2px 10px; font-size: 12px; color: #334155; }
+  .skill-group { margin-bottom: 6px; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
   .tailor-note { font-size: 11px; color: #94a3b8; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 8px; }
   @media print {
     body { padding: 24px 32px; }
@@ -87,6 +106,7 @@ function buildResumeHTML(data: ResumeData, jobTitle: string, company: string): s
   ${expHTML ? `<h2>Experience</h2>${expHTML}` : ""}
   ${eduHTML ? `<h2>Education</h2>${eduHTML}` : ""}
   ${skillsHTML ? `<h2>Skills</h2>${skillsHTML}` : ""}
+  ${projectsHTML ? `<h2>Projects</h2>${projectsHTML}` : ""}
   <p class="tailor-note">Tailored for: ${jobTitle} @ ${company}</p>
 </body>
 </html>`;
@@ -253,11 +273,38 @@ function ResumePreview({ data, fallback }: { data: ResumeData; fallback: string 
           </div>
         ))}</>
       ) : null}
-      {data.skills?.length ? (
+      {data.skills && (Array.isArray(data.skills) ? data.skills.length > 0 : Object.keys(data.skills).length > 0) ? (
         <><SectionHead>Skills</SectionHead>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-          {data.skills.map((s, i) => (
-            <span key={i} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 4, padding: "1px 8px", fontSize: 11 }}>{s}</span>
+        {Array.isArray(data.skills)
+          ? <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+              {data.skills.map((s, i) => (
+                <span key={i} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 4, padding: "1px 8px", fontSize: 11 }}>{s}</span>
+              ))}
+            </div>
+          : Object.entries(data.skills as Record<string, string[]>).map(([group, items], gi) => (
+              <div key={gi} style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 5, alignItems: "center" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#444", minWidth: 120 }}>{group}:</span>
+                {items.map((s, i) => (
+                  <span key={i} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 4, padding: "1px 8px", fontSize: 11 }}>{s}</span>
+                ))}
+              </div>
+            ))
+        }</>
+      ) : null}
+      {data.projects?.length ? (
+        <><SectionHead>Projects</SectionHead>
+        {data.projects.map((p, i) => (
+          <div key={i} style={{ marginBottom: 10 }}>
+            <strong style={{ fontSize: 13 }}>{p.name}</strong>
+            <div style={{ fontSize: 12, color: "#333", marginTop: 2 }}>{p.description}</div>
+          </div>
+        ))}</>
+      ) : null}
+      {data.ats_keywords?.length ? (
+        <><SectionHead>ATS Keywords</SectionHead>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+          {data.ats_keywords.map((k, i) => (
+            <span key={i} style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 4, padding: "1px 8px", fontSize: 11, color: "#1e40af" }}>{k}</span>
           ))}
         </div></>
       ) : null}
@@ -290,7 +337,20 @@ function formatResumeText(data: ResumeData): string {
     lines.push("", "EDUCATION");
     for (const e of data.education) lines.push(`${e.degree} — ${e.school} (${e.year})`);
   }
-  if (data.skills?.length) lines.push("", "SKILLS", data.skills.join(", "));
+  if (data.skills) {
+    if (Array.isArray(data.skills) && data.skills.length) {
+      lines.push("", "SKILLS", data.skills.join(", "));
+    } else if (!Array.isArray(data.skills)) {
+      lines.push("", "SKILLS");
+      for (const [group, items] of Object.entries(data.skills as Record<string, string[]>)) {
+        lines.push(`${group}: ${items.join(", ")}`);
+      }
+    }
+  }
+  if (data.projects?.length) {
+    lines.push("", "PROJECTS");
+    for (const p of data.projects) lines.push(`${p.name}: ${p.description}`);
+  }
   return lines.join("\n");
 }
 
