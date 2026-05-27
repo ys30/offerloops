@@ -346,6 +346,27 @@ export async function deleteProject(id: string): Promise<void> {
   await fetch(`${BASE}/projects/${id}`, { method: "DELETE", headers: authHeaders() });
 }
 
+export async function uploadProjectDoc(
+  file: File,
+  provider = "nvidia",
+  apiKey?: string,
+): Promise<Project> {
+  const form = new FormData();
+  form.append("file", file);
+  const qs = new URLSearchParams({ provider });
+  if (apiKey) qs.set("api_key", apiKey);
+  const res = await fetch(`${BASE}/projects/upload?${qs}`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: form,
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    try { throw new Error(JSON.parse(body).detail); } catch { throw new Error(body); }
+  }
+  return res.json();
+}
+
 // ── STAR Story Bank ────────────────────────────────────────────────
 
 export interface Story {

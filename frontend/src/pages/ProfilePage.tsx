@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { disconnectGmail, fetchGmailStatus, getToken, startGmailAuth, syncGmail, fetchProjects, createProject, updateProject, deleteProject, type Project } from "../api";
+import { disconnectGmail, fetchGmailStatus, getToken, startGmailAuth, syncGmail, fetchProjects, createProject, updateProject, deleteProject, uploadProjectDoc, type Project } from "../api";
 import type { GmailStatus } from "../types";
 
 interface Profile {
@@ -79,6 +79,11 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
   const [editingProject, setEditingProject] = useState<Partial<Project> | null>(null);
   const [editProjectId, setEditProjectId] = useState<string | null>(null);
   const [savingProject, setSavingProject] = useState(false);
+  const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [aiProvider, setAiProvider] = useState("nvidia");
+  const [aiKey, setAiKey] = useState("");
+  const projectFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchGmailStatus().then(setGmailStatus).catch(() => null);
@@ -227,6 +232,38 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
 
   const setProjectField = (k: keyof Project, v: unknown) => {
     setEditingProject(p => p ? { ...p, [k]: v } : p);
+  };
+
+  const toggleSelectProject = (id: string) => {
+    setSelectedProjects(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleDeleteSelected = async () => {
+    if (!confirm(`Delete ${selectedProjects.size} selected project(s)?`)) return;
+    await Promise.all([...selectedProjects].map(id => deleteProject(id)));
+    setProjects(ps => ps.filter(p => !selectedProjects.has(p.id)));
+    setSelectedProjects(new Set());
+    flash(`${selectedProjects.size} project(s) deleted.`);
+  };
+
+  const handleProjectDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingDoc(true);
+    try {
+      const project = await uploadProjectDoc(file, aiProvider, aiKey || undefined);
+      setProjects(ps => [project, ...ps]);
+      flash(`"${project.name}" extracted and added.`);
+    } catch (err: unknown) {
+      flash(err instanceof Error ? err.message : "Upload failed", false);
+    } finally {
+      setUploadingDoc(false);
+      if (projectFileRef.current) projectFileRef.current.value = "";
+    }
   };
 
   const handleGmailConnect = () => {
@@ -432,24 +469,63 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
 
       {/* Projects */}
       <section style={{ ...card, marginTop: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
           <div>
             <h2 style={{ ...sectionTitle, margin: 0 }}>Projects</h2>
             <p style={{ fontSize: 12, color: "#94a3b8", margin: "4px 0 0" }}>
               AI reads these when generating your resume, cover letter, and STAR stories.
             </p>
           </div>
-          <button
-            onClick={() => { setEditProjectId(null); setEditingProject({ ...EMPTY_PROJECT }); }}
-            style={primaryBtn}
-          >
-            + Add Project
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            {selectedProjects.size > 0 && (
+              <button onClick={handleDeleteSelected}
+                style={{ padding: "7px 14px", fontSize: 12, background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>
+                Delete {selectedProjects.size} selected
+              </button>
+            )}
+            <button onClick={() => { setEditProjectId(null); setEditingProject({ ...EMPTY_PROJECT }); setSelectedProjects(new Set()); }} style={{ ...primaryBtn, fontSize: 13 }}>
+              + Add Manually
+            </button>
+          </div>
         </div>
 
+        {/* Document upload zone */}
+        <div style={{ background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: 8, padding: "14px 16px", marginBottom: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+            📄 Upload Project Document
+          </div>
+          <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 10px", lineHeight: 1.6 }}>
+            Upload a PDF, DOCX, or TXT file — AI will extract the project name, role, tech stack, and outcomes automatically.
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <select value={aiProvider} onChange={e => setAiProvider(e.target.value)}
+              style={{ padding: "6px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, background: "#fff", cursor: "pointer" }}>
+              <option value="nvidia">NVIDIA NIM</option>
+              <option value="anthropic">Claude</option>
+              <option value="openai">OpenAI</option>
+              <option value="gemini">Gemini</option>
+            </select>
+            <input type="password" value={aiKey} onChange={e => setAiKey(e.target.value)}
+              placeholder="API key (blank if set on server)"
+              style={{ padding: "6px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 220, boxSizing: "border-box" }} />
+            <button
+              onClick={() => projectFileRef.current?.click()}
+              disabled={uploadingDoc}
+              style={{ ...primaryBtn, background: "#7c3aed", fontSize: 12 }}
+            >
+              {uploadingDoc ? "Extracting…" : "✨ Upload & Extract"}
+            </button>
+            <span style={{ fontSize: 11, color: "#94a3b8" }}>PDF · DOCX · TXT</span>
+          </div>
+          <input ref={projectFileRef} type="file" accept=".pdf,.docx,.doc,.txt,.md"
+            onChange={handleProjectDocUpload} style={{ display: "none" }} />
+        </div>
+
+        {/* Edit / New form */}
         {editingProject && (
-          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "16px", marginBottom: 14 }}>
-            <h3 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: "#1e293b" }}>
+          <div style={{ background: "#fff", border: "2px solid #2563eb", borderRadius: 10, padding: "16px 18px", marginBottom: 16 }}>
+            <h3 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: "#1e293b" }}>
               {editProjectId ? "Edit Project" : "New Project"}
             </h3>
             <div style={{ display: "flex", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
@@ -458,7 +534,7 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
                 <input value={editingProject.name || ""} onChange={e => setProjectField("name", e.target.value)}
                   placeholder="e.g. RCCDAS Climate Risk Dashboard" style={inp} />
               </div>
-              <div style={{ flex: 1, minWidth: 140 }}>
+              <div style={{ flex: 1, minWidth: 130 }}>
                 <label style={lbl}>Dates</label>
                 <input value={editingProject.dates || ""} onChange={e => setProjectField("dates", e.target.value)}
                   placeholder="e.g. 2022 – 2024" style={inp} />
@@ -467,7 +543,7 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
             <div style={{ marginBottom: 10 }}>
               <label style={lbl}>Your Role</label>
               <input value={editingProject.role || ""} onChange={e => setProjectField("role", e.target.value)}
-                placeholder="e.g. Lead Data Scientist — designed pipeline and built dashboard" style={inp} />
+                placeholder="e.g. Lead Data Scientist — designed pipeline and built Shiny dashboard" style={inp} />
             </div>
             <div style={{ marginBottom: 10 }}>
               <label style={lbl}>Description <span style={{ color: "#94a3b8", fontWeight: 400 }}>(what it does, what you built)</span></label>
@@ -477,8 +553,7 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
             </div>
             <div style={{ marginBottom: 10 }}>
               <label style={lbl}>Tech Stack <span style={{ color: "#94a3b8", fontWeight: 400 }}>(comma-separated)</span></label>
-              <input
-                value={(editingProject.tech_stack || []).join(", ")}
+              <input value={(editingProject.tech_stack || []).join(", ")}
                 onChange={e => setProjectField("tech_stack", e.target.value.split(",").map(s => s.trim()).filter(Boolean))}
                 placeholder="e.g. Python, R, ArcGIS, Shiny, PostgreSQL" style={inp} />
             </div>
@@ -495,55 +570,98 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={handleSaveProject} disabled={savingProject || !editingProject.name?.trim()} style={primaryBtn}>
-                {savingProject ? "Saving…" : "Save Project"}
+                {savingProject ? "Saving…" : editProjectId ? "Save Changes" : "Add Project"}
               </button>
-              <button onClick={() => { setEditingProject(null); setEditProjectId(null); }} style={secondaryBtn}>
-                Cancel
-              </button>
+              <button onClick={() => { setEditingProject(null); setEditProjectId(null); }} style={secondaryBtn}>Cancel</button>
             </div>
           </div>
         )}
 
+        {/* Project cards */}
         {projects.length === 0 && !editingProject ? (
           <div style={{ textAlign: "center", padding: "28px 0", color: "#94a3b8", fontSize: 13 }}>
-            No projects yet. Add projects to give AI richer context for tailoring your applications.
+            No projects yet — upload a document or add one manually.
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {projects.map(p => (
-              <div key={p.id} style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px", background: "#fff" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <span style={{ fontWeight: 700, fontSize: 14, color: "#1e293b" }}>{p.name}</span>
-                      {p.dates && <span style={{ fontSize: 11, color: "#64748b" }}>{p.dates}</span>}
-                    </div>
-                    {p.role && <div style={{ fontSize: 12, color: "#475569", marginTop: 3, fontStyle: "italic" }}>{p.role}</div>}
-                    {p.description && <div style={{ fontSize: 12, color: "#334155", marginTop: 5, lineHeight: 1.6 }}>{p.description}</div>}
-                    {p.tech_stack?.length > 0 && (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-                        {p.tech_stack.map(t => (
-                          <span key={t} style={{ fontSize: 11, background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: 4, padding: "1px 7px" }}>{t}</span>
-                        ))}
-                      </div>
-                    )}
-                    {p.outcome && <div style={{ fontSize: 12, color: "#15803d", marginTop: 5, background: "#f0fdf4", borderRadius: 5, padding: "4px 8px" }}>📈 {p.outcome}</div>}
-                    {p.url && <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: "#2563eb", marginTop: 4, display: "inline-block" }}>🔗 {p.url}</a>}
-                  </div>
-                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                    <button onClick={() => { setEditProjectId(p.id); setEditingProject({ ...p }); }}
-                      style={{ padding: "4px 10px", fontSize: 12, background: "#f8fafc", color: "#475569", border: "1px solid #e2e8f0", borderRadius: 5, cursor: "pointer" }}>
-                      Edit
-                    </button>
-                    <button onClick={() => handleDeleteProject(p.id)}
-                      style={{ padding: "4px 10px", fontSize: 12, background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 5, cursor: "pointer" }}>
-                      Delete
-                    </button>
-                  </div>
-                </div>
+          <>
+            {projects.length > 1 && (
+              <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 8 }}>
+                Click a card to select it. {selectedProjects.size > 0 && <strong style={{ color: "#2563eb" }}>{selectedProjects.size} selected</strong>}
               </div>
-            ))}
-          </div>
+            )}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 12 }}>
+              {projects.map(p => {
+                const selected = selectedProjects.has(p.id);
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => toggleSelectProject(p.id)}
+                    style={{
+                      border: `2px solid ${selected ? "#2563eb" : "#e2e8f0"}`,
+                      borderRadius: 10, padding: "14px 16px", background: selected ? "#eff6ff" : "#fff",
+                      cursor: "pointer", transition: "all 0.15s", position: "relative",
+                    }}
+                  >
+                    {/* Selection indicator */}
+                    <div style={{
+                      position: "absolute", top: 12, right: 12,
+                      width: 18, height: 18, borderRadius: 4,
+                      border: `2px solid ${selected ? "#2563eb" : "#cbd5e1"}`,
+                      background: selected ? "#2563eb" : "#fff",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 11, color: "#fff", fontWeight: 700, flexShrink: 0,
+                    }}>
+                      {selected ? "✓" : ""}
+                    </div>
+
+                    <div style={{ paddingRight: 28 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", lineHeight: 1.3 }}>{p.name}</div>
+                      {p.dates && <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{p.dates}</div>}
+                      {p.role && <div style={{ fontSize: 12, color: "#475569", marginTop: 4, fontStyle: "italic" }}>{p.role}</div>}
+                      {p.description && (
+                        <div style={{ fontSize: 12, color: "#334155", marginTop: 6, lineHeight: 1.6,
+                          display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                          {p.description}
+                        </div>
+                      )}
+                      {p.tech_stack?.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
+                          {p.tech_stack.slice(0, 6).map(t => (
+                            <span key={t} style={{ fontSize: 10, background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: 3, padding: "1px 6px" }}>{t}</span>
+                          ))}
+                          {p.tech_stack.length > 6 && <span style={{ fontSize: 10, color: "#94a3b8" }}>+{p.tech_stack.length - 6}</span>}
+                        </div>
+                      )}
+                      {p.outcome && (
+                        <div style={{ fontSize: 11, color: "#15803d", marginTop: 6, background: "#f0fdf4", borderRadius: 5, padding: "4px 8px", lineHeight: 1.5 }}>
+                          📈 {p.outcome}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Card actions */}
+                    <div style={{ display: "flex", gap: 6, marginTop: 12, paddingTop: 10, borderTop: "1px solid #f1f5f9" }}
+                      onClick={e => e.stopPropagation()}>
+                      {p.url && (
+                        <a href={p.url} target="_blank" rel="noopener noreferrer"
+                          style={{ fontSize: 11, color: "#2563eb", padding: "3px 8px", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 4, textDecoration: "none" }}>
+                          🔗 Link
+                        </a>
+                      )}
+                      <button onClick={() => { setEditProjectId(p.id); setEditingProject({ ...p }); setSelectedProjects(new Set()); }}
+                        style={{ marginLeft: "auto", padding: "3px 10px", fontSize: 11, background: "#f8fafc", color: "#475569", border: "1px solid #e2e8f0", borderRadius: 4, cursor: "pointer" }}>
+                        Edit
+                      </button>
+                      <button onClick={() => handleDeleteProject(p.id)}
+                        style={{ padding: "3px 10px", fontSize: 11, background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 4, cursor: "pointer" }}>
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </section>
 

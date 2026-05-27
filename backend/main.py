@@ -736,6 +736,88 @@ def delete_project(project_id: str, user_id: str = Depends(_require_user), db: S
     return {"ok": True}
 
 
+@app.post("/api/projects/upload", tags=["projects"])
+async def upload_project_doc(
+    file: UploadFile = File(...),
+    provider: str = Query("nvidia"),
+    api_key: Optional[str] = Query(None),
+    user_id: str = Depends(_require_user),
+    db: Session = Depends(get_db),
+):
+    """Extract project info from an uploaded document using AI."""
+    from .profile import parse_pdf, parse_docx
+    from .ai import call_ai
+    import json as _j, uuid as _u
+
+    data = await file.read()
+    fname = (file.filename or "").lower()
+
+    # Extract text
+    text = ""
+    if fname.endswith(".pdf"):
+        try:
+            text = parse_pdf(data)
+        except Exception:
+            pass
+    elif fname.endswith(".docx") or fname.endswith(".doc"):
+        try:
+            text = parse_docx(data)
+        except Exception:
+            pass
+    if not text.strip():
+        text = data.decode("utf-8", errors="replace")
+
+    text = text.strip()
+    if not text or len(text) < 30:
+        raise HTTPException(status_code=422, detail="Could not extract readable text from the file.")
+
+    # AI parse into project fields
+    prompt = f"""Extract structured project information from this document.
+
+Document text:
+{text[:6000]}
+
+Return ONLY valid JSON (no markdown) with these keys:
+{{
+  "name": "project title",
+  "dates": "time period e.g. 2022–2024 or empty string",
+  "role": "the person's specific role and contribution",
+  "description": "2-3 sentences: what the project is, its purpose, what was built",
+  "tech_stack": ["list", "of", "technologies", "tools", "languages"],
+  "outcome": "quantified results, impact, publications, deployments",
+  "url": "any URL found in the document or empty string"
+}}
+Be specific and concise. Extract only what is stated in the document."""
+
+    try:
+        raw = await call_ai(prompt, provider=provider, api_key=api_key)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AI provider error: {e}")
+
+    try:
+        start = raw.index("{")
+        end = raw.rindex("}") + 1
+        parsed = _j.loads(raw[start:end])
+    except Exception:
+        raise HTTPException(status_code=500, detail="AI returned invalid JSON. Try again.")
+
+    row = ProjectRow(
+        id=str(_u.uuid4()), user_id=user_id,
+        name=parsed.get("name", fname.replace(".pdf", "").replace(".docx", "")),
+        description=parsed.get("description"),
+        role=parsed.get("role"),
+        tech_stack=_j.dumps(parsed.get("tech_stack", [])),
+        outcome=parsed.get("outcome"),
+        url=parsed.get("url") or None,
+        dates=parsed.get("dates") or None,
+    )
+    db.add(row)
+    db.commit()
+    return _project_out(row)
+
+
 # ── Ingestion ────────────────────────────────────────────────────────
 
 
