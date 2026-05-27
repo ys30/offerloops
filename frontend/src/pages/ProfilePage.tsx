@@ -334,8 +334,6 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
 
   return (
     <div style={{ maxWidth: 780, margin: "0 auto", padding: "0 16px 80px" }}>
-      <button onClick={onBack} style={secondaryBtn}>← Back to Jobs</button>
-
       <h1 style={{ marginTop: 20, marginBottom: 4, fontSize: 22 }}>My Profile</h1>
       <p style={{ color: "#64748b", fontSize: 13, marginTop: 0, marginBottom: 24 }}>
         Your resume is stored here and used automatically for one-click application packs.

@@ -130,12 +130,16 @@ export default function App() {
 
   if (!authChecked) return null;
 
+  const goJobs = () => { setShowProfile(false); setShowDashboard(false); setShowMarket(false); setShowTracker(false); setShowStories(false); setSelectedId(null); };
+
   // Shared header props — same nav on every page
   const headerProps = {
     stats, user,
+    onJobs:      goJobs,
     onProfile:   () => { setShowProfile(true); setShowDashboard(false); setShowMarket(false); setShowTracker(false); setShowStories(false); },
     onDashboard: () => { setShowDashboard(true); setShowProfile(false); setShowMarket(false); setShowTracker(false); setShowStories(false); },
     onMarket:    () => { setShowMarket(true); setShowProfile(false); setShowDashboard(false); setShowTracker(false); setShowStories(false); },
+    onTracker:   () => { setShowTracker(true); setShowProfile(false); setShowDashboard(false); setShowMarket(false); setShowStories(false); },
     onStories:   () => { setShowStories(true); setShowProfile(false); setShowDashboard(false); setShowMarket(false); setShowTracker(false); },
     onLogout:    handleLogout,
     onSignIn:    () => setShowAuthModal(true),
@@ -147,7 +151,7 @@ export default function App() {
         {showAuthModal && <AuthPage onAuth={handleAuth} onClose={() => { setShowAuthModal(false); setResetToken(null); }} resetToken={resetToken} />}
         <Header {...headerProps} profileActive />
         <main style={mainStyle}>
-          <ProfilePage onBack={() => setShowProfile(false)} justConnectedGmail={justConnectedGmail} gmailError={gmailErrorMsg} />
+          <ProfilePage onBack={goJobs} justConnectedGmail={justConnectedGmail} gmailError={gmailErrorMsg} />
         </main>
       </div>
     );
@@ -157,9 +161,8 @@ export default function App() {
     return (
       <div style={pageStyle}>
         {showAuthModal && <AuthPage onAuth={handleAuth} onClose={() => { setShowAuthModal(false); setResetToken(null); }} resetToken={resetToken} />}
-        <Header {...headerProps} />
+        <Header {...headerProps} trackerActive />
         <main style={{ ...mainStyle, maxWidth: 1200 }}>
-          <button onClick={() => setShowTracker(false)} style={{ marginBottom: 16, padding: "6px 14px", background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>← Back to Jobs</button>
           <TrackerPage user={user} onSelectJob={id => { setShowTracker(false); setSelectedId(id); }} />
         </main>
       </div>
@@ -184,7 +187,7 @@ export default function App() {
         {showAuthModal && <AuthPage onAuth={handleAuth} onClose={() => { setShowAuthModal(false); setResetToken(null); }} resetToken={resetToken} />}
         <Header {...headerProps} marketActive />
         <main style={{ ...mainStyle, maxWidth: 1140 }}>
-          <MarketPage onBack={() => setShowMarket(false)} />
+          <MarketPage onBack={goJobs} />
         </main>
       </div>
     );
@@ -196,7 +199,7 @@ export default function App() {
         {showAuthModal && <AuthPage onAuth={handleAuth} onClose={() => { setShowAuthModal(false); setResetToken(null); }} resetToken={resetToken} />}
         <Header {...headerProps} storiesActive />
         <main style={{ ...mainStyle, maxWidth: 900 }}>
-          <StoryBankPage onBack={() => setShowStories(false)} />
+          <StoryBankPage onBack={goJobs} />
         </main>
       </div>
     );
@@ -227,7 +230,7 @@ export default function App() {
       {showAuthModal && (
         <AuthPage onAuth={handleAuth} onClose={() => setShowAuthModal(false)} />
       )}
-      <Header {...headerProps} />
+      <Header {...headerProps} jobsActive />
       <main style={mainStyle}>
         {/* Search bar */}
         <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
@@ -282,9 +285,6 @@ export default function App() {
           </button>
           <button onClick={() => setShowScoreAll(v => !v)} style={secondaryBtn}>
             {showScoreAll ? "Hide Score All" : "⚡ Score All"}
-          </button>
-          <button onClick={() => setShowTracker(true)} style={secondaryBtn}>
-            📋 Tracker
           </button>
         </div>
 
@@ -354,18 +354,22 @@ export default function App() {
   );
 }
 
-function Header({ stats, user, onProfile, onLogout, onSignIn, onDashboard, onMarket, onStories, profileActive, dashboardActive, marketActive, storiesActive }: {
+function Header({ stats, user, onJobs, onProfile, onLogout, onSignIn, onDashboard, onMarket, onTracker, onStories, jobsActive, profileActive, dashboardActive, marketActive, trackerActive, storiesActive }: {
   stats: Stats | null;
   user: User | null;
+  onJobs: () => void;
   onProfile: () => void;
   onLogout: () => void;
   onSignIn: () => void;
   onDashboard: () => void;
   onMarket: () => void;
+  onTracker: () => void;
   onStories: () => void;
+  jobsActive?: boolean;
   profileActive?: boolean;
   dashboardActive?: boolean;
   marketActive?: boolean;
+  trackerActive?: boolean;
   storiesActive?: boolean;
 }) {
   const navBtn = (active?: boolean): React.CSSProperties => ({
@@ -386,7 +390,9 @@ function Header({ stats, user, onProfile, onLogout, onSignIn, onDashboard, onMar
             open API · multi-model AI
           </span>
         </div>
-        <button onClick={onProfile} style={navBtn(profileActive)}>👤 My Profile</button>
+        <button onClick={onJobs} style={navBtn(jobsActive)}>💼 Jobs</button>
+        <button onClick={onProfile} style={navBtn(profileActive)}>👤 Profile</button>
+        <button onClick={onTracker} style={navBtn(trackerActive)}>📋 Tracker</button>
         <button onClick={onDashboard} style={navBtn(dashboardActive)}>📊 Dashboard</button>
         <button onClick={onMarket} style={navBtn(marketActive)}>🌐 Market</button>
         <button onClick={onStories} style={navBtn(storiesActive)}>📚 Stories</button>
