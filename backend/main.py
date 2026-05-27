@@ -736,6 +736,39 @@ def delete_project(project_id: str, user_id: str = Depends(_require_user), db: S
     return {"ok": True}
 
 
+@app.post("/api/projects/suggest-outcome", tags=["projects"])
+async def suggest_project_outcome(
+    payload: ProjectIn,
+    provider: str = Query("nvidia"),
+    api_key: Optional[str] = Query(None),
+    user_id: str = Depends(_require_user),
+):
+    """AI-generate a realistic outcome/impact statement for a project."""
+    from .ai import call_ai
+    import json as _j
+    tech = ", ".join(payload.tech_stack) if payload.tech_stack else ""
+    prompt = f"""You are a resume writer. Write a concise, specific outcome/impact statement (1-3 sentences, ~30-50 words) for the following project.
+
+Project: {payload.name}
+Role: {payload.role or "not specified"}
+Description: {payload.description or "not specified"}
+Tech Stack: {tech or "not specified"}
+
+Rules:
+- Focus on RESULTS and IMPACT: deployments, users, time saved, accuracy, publications, adoption, performance gains
+- Include numbers or scale wherever reasonable (% improvement, N users, N datasets, etc.)
+- If exact metrics are unknown, use realistic estimates for this type of project (e.g. "reduced processing time by ~40%")
+- Do NOT invent facts that contradict the description
+- Output only the outcome text — no labels, no bullet points"""
+    try:
+        result = await call_ai(prompt, provider=provider, api_key=api_key, max_tokens=200)
+        return {"outcome": result.strip()}
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AI error: {e}")
+
+
 @app.post("/api/projects/upload", tags=["projects"])
 async def upload_project_doc(
     file: UploadFile = File(...),

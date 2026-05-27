@@ -346,6 +346,26 @@ export async function deleteProject(id: string): Promise<void> {
   await fetch(`${BASE}/projects/${id}`, { method: "DELETE", headers: authHeaders() });
 }
 
+export async function suggestProjectOutcome(
+  project: Partial<ProjectPayload>,
+  provider = "nvidia",
+  apiKey?: string,
+): Promise<string> {
+  const qs = new URLSearchParams({ provider });
+  if (apiKey) qs.set("api_key", apiKey);
+  const res = await fetch(`${BASE}/projects/suggest-outcome?${qs}`, {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ name: project.name || "", tech_stack: project.tech_stack || [], ...project }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    try { throw new Error(JSON.parse(body).detail); } catch { throw new Error(body); }
+  }
+  const data = await res.json();
+  return data.outcome;
+}
+
 export async function uploadProjectDoc(
   file: File,
   provider = "nvidia",

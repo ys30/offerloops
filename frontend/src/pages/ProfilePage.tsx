@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { disconnectGmail, fetchGmailStatus, getToken, startGmailAuth, syncGmail, fetchProjects, createProject, updateProject, deleteProject, uploadProjectDoc, type Project } from "../api";
+import { disconnectGmail, fetchGmailStatus, getToken, startGmailAuth, syncGmail, fetchProjects, createProject, updateProject, deleteProject, uploadProjectDoc, suggestProjectOutcome, type Project } from "../api";
 import type { GmailStatus } from "../types";
 
 interface Profile {
@@ -83,7 +83,10 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [aiProvider, setAiProvider] = useState("nvidia");
   const [aiKey, setAiKey] = useState("");
+  const [projectFormError, setProjectFormError] = useState("");
+  const [suggestingOutcome, setSuggestingOutcome] = useState(false);
   const projectFileRef = useRef<HTMLInputElement>(null);
+  const projectNameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchGmailStatus().then(setGmailStatus).catch(() => null);
@@ -203,7 +206,12 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
   const EMPTY_PROJECT: Partial<Project> = { name: "", description: "", role: "", tech_stack: [], outcome: "", url: "", dates: "" };
 
   const handleSaveProject = async () => {
-    if (!editingProject?.name?.trim()) return;
+    setProjectFormError("");
+    if (!editingProject?.name?.trim()) {
+      setProjectFormError("Project name is required.");
+      projectNameRef.current?.focus();
+      return;
+    }
     setSavingProject(true);
     try {
       if (editProjectId) {
@@ -215,9 +223,11 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
       }
       setEditingProject(null);
       setEditProjectId(null);
+      setProjectFormError("");
       flash("Project saved.");
     } catch (e: unknown) {
-      flash(e instanceof Error ? e.message : "Save failed", false);
+      const msg = e instanceof Error ? e.message : "Save failed";
+      setProjectFormError(msg);
     } finally {
       setSavingProject(false);
     }
@@ -248,6 +258,20 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
     setProjects(ps => ps.filter(p => !selectedProjects.has(p.id)));
     setSelectedProjects(new Set());
     flash(`${selectedProjects.size} project(s) deleted.`);
+  };
+
+  const handleSuggestOutcome = async () => {
+    if (!editingProject) return;
+    setSuggestingOutcome(true);
+    setProjectFormError("");
+    try {
+      const outcome = await suggestProjectOutcome(editingProject, aiProvider, aiKey || undefined);
+      setProjectField("outcome", outcome);
+    } catch (e: unknown) {
+      setProjectFormError(e instanceof Error ? e.message : "AI suggestion failed");
+    } finally {
+      setSuggestingOutcome(false);
+    }
   };
 
   const handleProjectDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -484,7 +508,7 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
                 Delete {selectedProjects.size} selected
               </button>
             )}
-            <button onClick={() => { setEditProjectId(null); setEditingProject({ ...EMPTY_PROJECT }); setSelectedProjects(new Set()); }} style={{ ...primaryBtn, fontSize: 13 }}>
+            <button onClick={() => { setEditProjectId(null); setEditingProject({ ...EMPTY_PROJECT }); setProjectFormError(""); setSelectedProjects(new Set()); setTimeout(() => projectNameRef.current?.focus(), 50); }} style={{ ...primaryBtn, fontSize: 13 }}>
               + Add Manually
             </button>
           </div>
@@ -531,8 +555,11 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
             <div style={{ display: "flex", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
               <div style={{ flex: 2, minWidth: 180 }}>
                 <label style={lbl}>Project Name *</label>
-                <input value={editingProject.name || ""} onChange={e => setProjectField("name", e.target.value)}
-                  placeholder="e.g. RCCDAS Climate Risk Dashboard" style={inp} />
+                <input
+                  ref={projectNameRef}
+                  value={editingProject.name || ""} onChange={e => setProjectField("name", e.target.value)}
+                  placeholder="e.g. RCCDAS Climate Risk Dashboard"
+                  style={{ ...inp, borderColor: (!editingProject.name?.trim() && projectFormError) ? "#dc2626" : undefined }} />
               </div>
               <div style={{ flex: 1, minWidth: 130 }}>
                 <label style={lbl}>Dates</label>
@@ -558,21 +585,42 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
                 placeholder="e.g. Python, R, ArcGIS, Shiny, PostgreSQL" style={inp} />
             </div>
             <div style={{ marginBottom: 10 }}>
-              <label style={lbl}>Outcome / Impact <span style={{ color: "#94a3b8", fontWeight: 400 }}>(results, metrics, publications)</span></label>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <label style={{ ...lbl, marginBottom: 0 }}>
+                  Outcome / Impact
+                  <span style={{ color: "#94a3b8", fontWeight: 400, marginLeft: 6 }}>(results, metrics, publications)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={handleSuggestOutcome}
+                  disabled={suggestingOutcome}
+                  style={{ padding: "3px 10px", fontSize: 11, background: "#faf5ff", color: "#7c3aed", border: "1px solid #e9d5ff", borderRadius: 5, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}
+                >
+                  {suggestingOutcome ? "Generating…" : "✨ AI Suggest"}
+                </button>
+              </div>
               <textarea value={editingProject.outcome || ""} onChange={e => setProjectField("outcome", e.target.value)}
                 rows={2} placeholder="e.g. Deployed to 3 federal agencies; cited in 2 peer-reviewed papers; reduced analysis time by 60%"
                 style={{ ...inp, resize: "vertical", fontFamily: "inherit" }} />
+              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 3 }}>
+                Click "AI Suggest" to auto-generate based on your project name, role, and description.
+              </div>
             </div>
             <div style={{ marginBottom: 14 }}>
               <label style={lbl}>URL <span style={{ color: "#94a3b8", fontWeight: 400 }}>(GitHub, paper, demo)</span></label>
               <input value={editingProject.url || ""} onChange={e => setProjectField("url", e.target.value)}
                 placeholder="https://github.com/..." style={inp} />
             </div>
+            {projectFormError && (
+              <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 12, color: "#dc2626" }}>
+                {projectFormError}
+              </div>
+            )}
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={handleSaveProject} disabled={savingProject || !editingProject.name?.trim()} style={primaryBtn}>
+              <button onClick={handleSaveProject} disabled={savingProject} style={primaryBtn}>
                 {savingProject ? "Saving…" : editProjectId ? "Save Changes" : "Add Project"}
               </button>
-              <button onClick={() => { setEditingProject(null); setEditProjectId(null); }} style={secondaryBtn}>Cancel</button>
+              <button onClick={() => { setEditingProject(null); setEditProjectId(null); setProjectFormError(""); }} style={secondaryBtn}>Cancel</button>
             </div>
           </div>
         )}
@@ -648,7 +696,7 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
                           🔗 Link
                         </a>
                       )}
-                      <button onClick={() => { setEditProjectId(p.id); setEditingProject({ ...p }); setSelectedProjects(new Set()); }}
+                      <button onClick={() => { setEditProjectId(p.id); setEditingProject({ ...p }); setProjectFormError(""); setSelectedProjects(new Set()); }}
                         style={{ marginLeft: "auto", padding: "3px 10px", fontSize: 11, background: "#f8fafc", color: "#475569", border: "1px solid #e2e8f0", borderRadius: 4, cursor: "pointer" }}>
                         Edit
                       </button>
