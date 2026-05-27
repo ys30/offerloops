@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -738,7 +738,7 @@ def delete_project(project_id: str, user_id: str = Depends(_require_user), db: S
 
 @app.post("/api/projects/suggest-outcome", tags=["projects"])
 async def suggest_project_outcome(
-    payload: ProjectIn,
+    request: Request,
     provider: str = Query("nvidia"),
     api_key: Optional[str] = Query(None),
     user_id: str = Depends(_require_user),
@@ -746,6 +746,18 @@ async def suggest_project_outcome(
     """AI-generate a realistic outcome/impact statement for a project."""
     from .ai import call_ai
     import json as _j
+    # Manually parse body to guard against double-serialization edge cases
+    raw = await request.body()
+    try:
+        data = _j.loads(raw)
+        if isinstance(data, str):
+            data = _j.loads(data)  # handle accidental double-encoding
+    except Exception:
+        raise HTTPException(status_code=422, detail="Invalid JSON body")
+    try:
+        payload = ProjectIn(**{k: v for k, v in data.items() if k in ProjectIn.model_fields})
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
     tech = ", ".join(payload.tech_stack) if payload.tech_stack else ""
     prompt = f"""You are a resume writer. Write a concise, specific outcome/impact statement (1-3 sentences, ~30-50 words) for the following project.
 

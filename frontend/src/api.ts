@@ -356,7 +356,12 @@ export async function suggestProjectOutcome(
   const res = await fetch(`${BASE}/projects/suggest-outcome?${qs}`, {
     method: "POST",
     headers: authHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ name: project.name || "", tech_stack: project.tech_stack || [], ...project }),
+    body: JSON.stringify({
+      name: project.name || "",
+      description: project.description || null,
+      role: project.role || null,
+      tech_stack: Array.isArray(project.tech_stack) ? project.tech_stack : [],
+    }),
   });
   if (!res.ok) {
     const body = await res.text();
