@@ -335,13 +335,25 @@ export async function fetchProjects(): Promise<Project[]> {
   return res.json();
 }
 
+function projectBody(payload: Partial<ProjectPayload>): string {
+  return JSON.stringify({
+    name: payload.name ?? "",
+    description: payload.description ?? null,
+    role: payload.role ?? null,
+    tech_stack: Array.isArray(payload.tech_stack) ? payload.tech_stack : [],
+    outcome: payload.outcome ?? null,
+    url: payload.url ?? null,
+    dates: payload.dates ?? null,
+  });
+}
+
 export async function createProject(payload: Partial<ProjectPayload>): Promise<Project> {
   const res = await fetch(`${BASE}/projects`, {
     method: "POST",
     headers: authHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ tech_stack: [], ...payload }),
+    body: projectBody(payload),
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await extractDetail(res));
   return res.json();
 }
 
@@ -349,9 +361,9 @@ export async function updateProject(id: string, payload: Partial<ProjectPayload>
   const res = await fetch(`${BASE}/projects/${id}`, {
     method: "PATCH",
     headers: authHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ tech_stack: [], ...payload }),
+    body: projectBody(payload),
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await extractDetail(res));
   return res.json();
 }
 

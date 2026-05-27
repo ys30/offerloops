@@ -697,9 +697,21 @@ def list_projects(user_id: str = Depends(_require_user), db: Session = Depends(g
     rows = db.query(ProjectRow).filter(ProjectRow.user_id == user_id).order_by(ProjectRow.updated_at.desc()).all()
     return [_project_out(r) for r in rows]
 
+def _parse_project_body(raw: bytes) -> "ProjectIn":
+    """Parse project JSON body, handling accidental double-serialization."""
+    import json as _j
+    data = _j.loads(raw)
+    if isinstance(data, str):
+        data = _j.loads(data)
+    return ProjectIn(**{k: v for k, v in data.items() if k in ProjectIn.model_fields})
+
 @app.post("/api/projects", tags=["projects"])
-def create_project(payload: ProjectIn, user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+async def create_project(request: Request, user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
     import json as _j, uuid as _u
+    try:
+        payload = _parse_project_body(await request.body())
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Invalid body: {e}")
     row = ProjectRow(
         id=str(_u.uuid4()), user_id=user_id,
         name=payload.name, description=payload.description, role=payload.role,
@@ -711,8 +723,12 @@ def create_project(payload: ProjectIn, user_id: str = Depends(_require_user), db
     return _project_out(row)
 
 @app.patch("/api/projects/{project_id}", tags=["projects"])
-def update_project(project_id: str, payload: ProjectIn, user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+async def update_project(project_id: str, request: Request, user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
     import json as _j
+    try:
+        payload = _parse_project_body(await request.body())
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Invalid body: {e}")
     row = db.get(ProjectRow, project_id)
     if not row or row.user_id != user_id:
         raise HTTPException(status_code=404, detail="Project not found")
