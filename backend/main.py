@@ -697,6 +697,7 @@ Return ONLY a valid JSON array, no markdown:
 [{{"id": "...", "score": 75, "reason": "one sentence max"}}]"""
 
     try:
+        from .ai import call_ai
         raw = await call_ai(prompt, provider=provider, api_key=api_key, max_tokens=800)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI error: {e}")
