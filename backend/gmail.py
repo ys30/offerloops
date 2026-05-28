@@ -159,23 +159,37 @@ async def refresh_token(refresh: str, client_id: str, client_secret: str) -> dic
 
 # ── Gmail API calls ──────────────────────────────────────────────────────────
 
-async def get_access_token(db, user_id: str) -> Optional[str]:
-    """Return a valid access token, refreshing if needed."""
+async def get_access_token(db, user_id: str) -> tuple[Optional[str], Optional[str]]:
+    """Return (access_token, error). Refreshes if needed."""
     from .database import GmailTokenRow
     import os
     row = db.query(GmailTokenRow).filter(GmailTokenRow.user_id == user_id).first()
     if not row or not row.refresh_token:
-        return None
+        return None, "Gmail not connected — please reconnect in Profile."
     if row.expires_at and row.expires_at > datetime.utcnow() + timedelta(minutes=2):
-        return row.access_token
+        return row.access_token, None
     # Refresh
     client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
     client_secret = os.environ.get("GOOGLE_CLIENT_SECRET", "")
-    data = await refresh_token(row.refresh_token, client_id, client_secret)
+    if not client_id or not client_secret:
+        return None, "Google OAuth credentials not configured on the server."
+    try:
+        data = await refresh_token(row.refresh_token, client_id, client_secret)
+    except httpx.HTTPStatusError as e:
+        body = e.response.text
+        if "invalid_grant" in body or e.response.status_code == 400:
+            # Token revoked or expired — user must reconnect
+            row.refresh_token = None
+            row.access_token = None
+            db.commit()
+            return None, "Gmail session expired — please reconnect Gmail in Profile."
+        return None, f"Token refresh failed ({e.response.status_code}): {body[:200]}"
+    except Exception as e:
+        return None, f"Token refresh error: {e}"
     row.access_token = data["access_token"]
     row.expires_at = datetime.utcnow() + timedelta(seconds=data.get("expires_in", 3600))
     db.commit()
-    return row.access_token
+    return row.access_token, None
 
 
 async def list_messages(access_token: str, days_back: int = 60, max_results: int = 200) -> list[dict]:
@@ -223,9 +237,9 @@ async def sync_emails(db, user_id: str, days_back: int = 60) -> dict:
     """
     from .database import EmailEventRow, JobRow
 
-    access_token = await get_access_token(db, user_id)
+    access_token, token_err = await get_access_token(db, user_id)
     if not access_token:
-        return {"error": "Gmail not connected"}
+        return {"error": token_err or "Gmail not connected"}
 
     messages = await list_messages(access_token, days_back=days_back)
     new_events = 0
