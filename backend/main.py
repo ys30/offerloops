@@ -185,6 +185,78 @@ def list_jobs(
     )
 
 
+@app.post("/api/jobs/extract-url", tags=["jobs"])
+async def extract_job_from_url(request: Request):
+    """Fetch a job posting URL and extract structured fields using AI."""
+    import json as _j
+    from bs4 import BeautifulSoup
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=422, detail="Invalid JSON body")
+    url: str = body.get("url", "").strip()
+    provider: str = body.get("provider", "nvidia")
+    api_key: Optional[str] = body.get("api_key") or None
+    if not url:
+        raise HTTPException(status_code=422, detail="url is required")
+
+    # Fetch page
+    try:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as c:
+            r = await c.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; JobBot/1.0)"})
+        r.raise_for_status()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not fetch URL: {e}")
+
+    # Strip HTML to plain text
+    soup = BeautifulSoup(r.text, "html.parser")
+    for tag in soup(["script", "style", "nav", "header", "footer", "aside"]):
+        tag.decompose()
+    text = soup.get_text(separator="\n", strip=True)[:8000]
+
+    prompt = f"""Extract job posting information from the text below and return ONLY valid JSON (no markdown).
+
+URL: {url}
+
+Page text:
+{text}
+
+Return this exact JSON structure:
+{{
+  "title": "exact job title",
+  "company": "company name",
+  "location_city": "city or empty string",
+  "location_state": "state abbreviation or empty string",
+  "location_remote": true or false,
+  "description": "full job description text, preserve important details",
+  "requirements": ["requirement 1", "requirement 2"],
+  "salary_min": null or number,
+  "salary_max": null or number,
+  "job_type": "full_time or part_time or contract or internship",
+  "tags": ["skill1", "skill2"]
+}}
+
+Rules:
+- If salary not mentioned, use null
+- tags should be technical skills and keywords
+- requirements should be bullet-point style strings
+- description should be comprehensive, not truncated"""
+
+    try:
+        from .ai import call_ai
+        raw = await call_ai(prompt, provider=provider, api_key=api_key, max_tokens=2000)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AI error: {e}")
+
+    try:
+        start, end = raw.index("{"), raw.rindex("}") + 1
+        data = _j.loads(raw[start:end])
+        data["apply_url"] = url
+        return data
+    except Exception:
+        raise HTTPException(status_code=502, detail="AI returned unparseable response")
+
+
 @app.get("/api/jobs/{job_id}", response_model=Job, tags=["jobs"])
 def get_job(job_id: str, db: Session = Depends(get_db)):
     row = db.get(JobRow, job_id)

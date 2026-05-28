@@ -124,6 +124,16 @@ export async function fetchJob(id: string): Promise<Job> {
   return res.json();
 }
 
+export async function extractJobFromUrl(url: string, provider = "nvidia", apiKey?: string): Promise<Record<string, unknown>> {
+  const res = await fetch(`${BASE}/jobs/extract-url`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ url, provider, api_key: apiKey || null }),
+  });
+  if (!res.ok) throw new Error(await safeDetail(res, "Extraction failed"));
+  return res.json();
+}
+
 export async function createJob(payload: Record<string, unknown>): Promise<Job> {
   const res = await fetch(`${BASE}/jobs`, {
     method: "POST",

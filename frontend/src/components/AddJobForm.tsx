@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createJob } from "../api";
+import { createJob, extractJobFromUrl } from "../api";
 
 interface Props {
   onCreated: () => void;
@@ -22,9 +22,39 @@ export default function AddJobForm({ onCreated, onClose }: Props) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [extractUrl, setExtractUrl] = useState("");
+  const [extracting, setExtracting] = useState(false);
 
   function set(key: string, value: unknown) {
     setForm(f => ({ ...f, [key]: value }));
+  }
+
+  async function handleExtract() {
+    if (!extractUrl.trim()) return;
+    setExtracting(true);
+    setError("");
+    try {
+      const provider = localStorage.getItem("ol_ai_provider") || "nvidia";
+      const apiKey = localStorage.getItem("ol_ai_key") || undefined;
+      const data = await extractJobFromUrl(extractUrl.trim(), provider, apiKey);
+      setForm(f => ({
+        ...f,
+        title: (data.title as string) || f.title,
+        company: (data.company as string) || f.company,
+        location_city: (data.location_city as string) || f.location_city,
+        location_state: (data.location_state as string) || f.location_state,
+        location_remote: (data.location_remote as boolean) ?? f.location_remote,
+        description: (data.description as string) || f.description,
+        apply_url: (data.apply_url as string) || extractUrl.trim(),
+        salary_min: data.salary_min != null ? String(data.salary_min) : f.salary_min,
+        salary_max: data.salary_max != null ? String(data.salary_max) : f.salary_max,
+        tags: Array.isArray(data.tags) ? (data.tags as string[]).join(", ") : f.tags,
+      }));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Extraction failed");
+    } finally {
+      setExtracting(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -54,6 +84,32 @@ export default function AddJobForm({ onCreated, onClose }: Props) {
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
           <h2 style={{ margin: 0, fontSize: 18 }}>Add Job Posting</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#888" }}>×</button>
+        </div>
+
+        {/* URL extraction */}
+        <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8, padding: "12px 14px", marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#0369a1", marginBottom: 8 }}>🔗 Extract from Job URL</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              type="url"
+              value={extractUrl}
+              onChange={e => setExtractUrl(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && (e.preventDefault(), handleExtract())}
+              placeholder="https://jobs.lever.co/company/job-id or any job posting URL…"
+              style={{ ...inp, flex: 1 }}
+            />
+            <button
+              type="button"
+              onClick={handleExtract}
+              disabled={extracting || !extractUrl.trim()}
+              style={{ ...primaryBtn, background: "#0284c7", whiteSpace: "nowrap" }}
+            >
+              {extracting ? "Extracting…" : "✨ Extract"}
+            </button>
+          </div>
+          <div style={{ fontSize: 11, color: "#0369a1", marginTop: 6 }}>
+            Paste any job posting link — AI fills the form automatically. Review and edit before saving.
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
