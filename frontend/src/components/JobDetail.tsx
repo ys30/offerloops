@@ -392,12 +392,8 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
           </section>
         )}
 
-        {/* STAR Story Bank — shown for jobs scoring ≥ 70 */}
-        {getToken() && score !== null && score !== undefined && score < 70 ? (
-          <div style={{ marginTop: 24, padding: "12px 16px", background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, color: "#94a3b8", textAlign: "center" }}>
-            📖 STAR Stories available for jobs scoring ≥ 70 — score this job first to unlock.
-          </div>
-        ) : getToken() && (
+        {/* STAR Story Bank */}
+        {getToken() && (
           <section style={{ marginTop: 24, padding: 16, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
               <div style={{ fontWeight: 700, fontSize: 14, color: "#1e293b" }}>
