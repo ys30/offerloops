@@ -185,6 +185,114 @@ def list_jobs(
     )
 
 
+async def _ats_fetch_workday(url: str) -> tuple[dict, str]:
+    """Use Workday CXS API to get structured job data without JS rendering."""
+    from urllib.parse import urlparse
+    from bs4 import BeautifulSoup
+    p = urlparse(url)
+    host = p.hostname or ""
+    parts = [seg for seg in p.path.split("/") if seg]
+    # path: [locale, site, 'details', job-slug]
+    if len(parts) < 4:
+        return {}, ""
+    tenant = host.split(".")[0]
+    site = parts[1]
+    job_slug = parts[3]
+    api_url = f"https://{host}/wday/cxs/{tenant}/{site}/jobs/{job_slug}"
+    try:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as c:
+            r = await c.get(api_url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0"})
+        if r.status_code != 200:
+            return {}, ""
+        d = r.json()
+    except Exception:
+        return {}, ""
+    info = d.get("jobPostingInfo", {})
+    desc_html = d.get("jobDescription", {}).get("content", "")
+    desc_text = BeautifulSoup(desc_html, "html.parser").get_text("\n", strip=True)
+    location_raw = d.get("locationsText", "")
+    loc_parts = [x.strip() for x in location_raw.split(",")]
+    pre = {
+        "title": info.get("title", ""),
+        "company": tenant.upper(),
+        "location_city": loc_parts[0] if loc_parts else "",
+        "location_state": loc_parts[1] if len(loc_parts) > 1 else "",
+        "location_remote": "remote" in location_raw.lower(),
+        "apply_url": url,
+    }
+    return pre, desc_text
+
+
+async def _ats_fetch_lever(url: str) -> tuple[dict, str]:
+    """Use Lever public API to get job details."""
+    from urllib.parse import urlparse
+    from bs4 import BeautifulSoup
+    p = urlparse(url)
+    parts = [s for s in p.path.split("/") if s]
+    # jobs.lever.co/{company}/{id}
+    if len(parts) < 2:
+        return {}, ""
+    company, job_id = parts[0], parts[1]
+    api_url = f"https://api.lever.co/v0/postings/{company}/{job_id}"
+    try:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as c:
+            r = await c.get(api_url, headers={"Accept": "application/json"})
+        if r.status_code != 200:
+            return {}, ""
+        d = r.json()
+    except Exception:
+        return {}, ""
+    desc_html = d.get("description", "") + "\n".join(
+        item.get("content", "") for item in d.get("lists", [])
+    )
+    desc_text = BeautifulSoup(desc_html, "html.parser").get_text("\n", strip=True)
+    cats = d.get("categories", {})
+    loc = cats.get("location", "")
+    pre = {
+        "title": d.get("text", ""),
+        "company": d.get("company", company),
+        "location_city": loc,
+        "location_state": "",
+        "location_remote": "remote" in loc.lower() or cats.get("commitment", "").lower() == "remote",
+        "apply_url": url,
+    }
+    return pre, desc_text
+
+
+async def _ats_fetch_greenhouse(url: str) -> tuple[dict, str]:
+    """Use Greenhouse boards API to get job details."""
+    from urllib.parse import urlparse
+    from bs4 import BeautifulSoup
+    import re
+    p = urlparse(url)
+    parts = [s for s in p.path.split("/") if s]
+    # boards.greenhouse.io/{company}/jobs/{id}  OR  job-boards.greenhouse.io/{company}/jobs/{id}
+    if len(parts) < 3:
+        return {}, ""
+    company, job_id = parts[0], parts[2]
+    api_url = f"https://boards-api.greenhouse.io/v1/boards/{company}/jobs/{job_id}"
+    try:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as c:
+            r = await c.get(api_url, headers={"Accept": "application/json"})
+        if r.status_code != 200:
+            return {}, ""
+        d = r.json()
+    except Exception:
+        return {}, ""
+    desc_html = d.get("content", "")
+    desc_text = BeautifulSoup(desc_html, "html.parser").get_text("\n", strip=True)
+    loc = d.get("location", {}).get("name", "")
+    pre = {
+        "title": d.get("title", ""),
+        "company": d.get("company", {}).get("name", company),
+        "location_city": loc,
+        "location_state": "",
+        "location_remote": "remote" in loc.lower(),
+        "apply_url": url,
+    }
+    return pre, desc_text
+
+
 @app.post("/api/jobs/extract-url", tags=["jobs"])
 async def extract_job_from_url(request: Request):
     """Fetch a job posting URL and extract structured fields using AI."""
@@ -200,26 +308,47 @@ async def extract_job_from_url(request: Request):
     if not url:
         raise HTTPException(status_code=422, detail="url is required")
 
-    # Fetch page
-    try:
-        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as c:
-            r = await c.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; JobBot/1.0)"})
-        r.raise_for_status()
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Could not fetch URL: {e}")
+    from urllib.parse import urlparse
+    host = urlparse(url).hostname or ""
 
-    # Strip HTML to plain text
-    soup = BeautifulSoup(r.text, "html.parser")
-    for tag in soup(["script", "style", "nav", "header", "footer", "aside"]):
-        tag.decompose()
-    text = soup.get_text(separator="\n", strip=True)[:8000]
+    # Platform-specific API fetchers (no JS rendering needed)
+    pre_extracted: dict = {}
+    page_text: str = ""
+    source_label: str = "generic"
+
+    if "myworkdayjobs.com" in host:
+        pre_extracted, page_text = await _ats_fetch_workday(url)
+        source_label = "workday"
+    elif "lever.co" in host:
+        pre_extracted, page_text = await _ats_fetch_lever(url)
+        source_label = "lever"
+    elif "greenhouse.io" in host:
+        pre_extracted, page_text = await _ats_fetch_greenhouse(url)
+        source_label = "greenhouse"
+
+    # Generic fallback: httpx + BeautifulSoup
+    if not page_text:
+        try:
+            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as c:
+                r = await c.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; JobBot/1.0)"})
+            r.raise_for_status()
+            soup = BeautifulSoup(r.text, "html.parser")
+            for tag in soup(["script", "style", "nav", "header", "footer", "aside"]):
+                tag.decompose()
+            page_text = soup.get_text(separator="\n", strip=True)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Could not fetch URL: {e}")
+
+    pre_hint = ""
+    if pre_extracted:
+        pre_hint = f"\nAlready extracted (verify/correct these):\n{_j.dumps(pre_extracted, indent=2)}\n"
 
     prompt = f"""Extract job posting information from the text below and return ONLY valid JSON (no markdown).
-
+Source: {source_label} ATS
 URL: {url}
-
+{pre_hint}
 Page text:
-{text}
+{page_text[:8000]}
 
 Return this exact JSON structure:
 {{
@@ -238,9 +367,9 @@ Return this exact JSON structure:
 
 Rules:
 - If salary not mentioned, use null
-- tags should be technical skills and keywords
-- requirements should be bullet-point style strings
-- description should be comprehensive, not truncated"""
+- tags should be technical skills and keywords (5-10 items)
+- description should be comprehensive, not truncated
+- Use pre-extracted values above as ground truth when text is ambiguous"""
 
     try:
         from .ai import call_ai
@@ -251,6 +380,10 @@ Rules:
     try:
         start, end = raw.index("{"), raw.rindex("}") + 1
         data = _j.loads(raw[start:end])
+        # Merge pre-extracted fields that AI might have missed
+        for k, v in pre_extracted.items():
+            if k not in data or not data[k]:
+                data[k] = v
         data["apply_url"] = url
         return data
     except Exception:

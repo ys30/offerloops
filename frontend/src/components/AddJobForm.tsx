@@ -24,19 +24,32 @@ export default function AddJobForm({ onCreated, onClose }: Props) {
   const [error, setError] = useState("");
   const [extractUrl, setExtractUrl] = useState("");
   const [extracting, setExtracting] = useState(false);
+  const [extractSource, setExtractSource] = useState<string | null>(null);
 
   function set(key: string, value: unknown) {
     setForm(f => ({ ...f, [key]: value }));
+  }
+
+  function detectSource(url: string): string {
+    if (url.includes("myworkdayjobs.com")) return "Workday";
+    if (url.includes("lever.co")) return "Lever";
+    if (url.includes("greenhouse.io")) return "Greenhouse";
+    if (url.includes("usajobs.gov")) return "USAJobs";
+    if (url.includes("linkedin.com")) return "LinkedIn";
+    if (url.includes("indeed.com")) return "Indeed";
+    return "Web";
   }
 
   async function handleExtract() {
     if (!extractUrl.trim()) return;
     setExtracting(true);
     setError("");
+    setExtractSource(null);
     try {
       const provider = localStorage.getItem("ol_ai_provider") || "nvidia";
       const apiKey = localStorage.getItem("ol_ai_key") || undefined;
       const data = await extractJobFromUrl(extractUrl.trim(), provider, apiKey);
+      setExtractSource(detectSource(extractUrl.trim()));
       setForm(f => ({
         ...f,
         title: (data.title as string) || f.title,
@@ -107,8 +120,13 @@ export default function AddJobForm({ onCreated, onClose }: Props) {
               {extracting ? "Extracting…" : "✨ Extract"}
             </button>
           </div>
-          <div style={{ fontSize: 11, color: "#0369a1", marginTop: 6 }}>
-            Paste any job posting link — AI fills the form automatically. Review and edit before saving.
+          <div style={{ fontSize: 11, color: "#0369a1", marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
+            <span>Paste any job link — Workday, Lever, Greenhouse, LinkedIn, USAJobs, or any URL.</span>
+            {extractSource && (
+              <span style={{ background: "#0284c7", color: "#fff", borderRadius: 99, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>
+                ✓ {extractSource}
+              </span>
+            )}
           </div>
         </div>
 
