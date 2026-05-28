@@ -391,11 +391,11 @@ function Header({ stats, user, onJobs, onProfile, onLogout, onSignIn, onDashboar
           </span>
         </div>
         <button onClick={onJobs} style={navBtn(jobsActive)}>💼 Jobs</button>
-        <button onClick={onProfile} style={navBtn(profileActive)}>👤 Profile</button>
         <button onClick={onTracker} style={navBtn(trackerActive)}>📋 Tracker</button>
         <button onClick={onDashboard} style={navBtn(dashboardActive)}>📊 Dashboard</button>
         <button onClick={onMarket} style={navBtn(marketActive)}>🌐 Market</button>
         <button onClick={onStories} style={navBtn(storiesActive)}>📚 Stories</button>
+        <button onClick={onProfile} style={navBtn(profileActive)}>👤 Profile</button>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
         {stats && (
