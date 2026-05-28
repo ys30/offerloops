@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { EmailEvent, Job } from "../types";
-import { analyzeJob, createStory, fetchEmailEvents, generateApplicationPack, getToken, linkStory, recommendStories, unlinkStory, updateJobStatus } from "../api";
+import { analyzeJob, createStory, fetchEmailEvents, generateApplicationPack, getToken, linkStory, recommendStories, scoreStoriesAI, unlinkStory, updateJobStatus } from "../api";
 import type { Story } from "../api";
 import ApplicationPack from "./ApplicationPack";
 
@@ -60,6 +60,8 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
   const [storyDraft, setStoryDraft] = useState({ title: "", situation: "", task: "", action: "", result: "", skills: "" });
   const [savingStory, setSavingStory] = useState(false);
   const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [aiScoringStories, setAiScoringStories] = useState(false);
+  const [storyScoreError, setStoryScoreError] = useState("");
 
   useEffect(() => {
     if (getToken()) recommendStories(job.id).then(setStories).catch(() => null);
@@ -401,15 +403,36 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
               <div style={{ fontWeight: 700, fontSize: 14, color: "#1e293b" }}>
                 📖 STAR Stories
                 <span style={{ fontWeight: 400, fontSize: 12, color: "#64748b", marginLeft: 8 }}>
-                  {stories.filter(s => s.linked).length} linked · {stories.length} recommended from pool
+                  {stories.filter(s => s.linked).length} linked · {stories.length} from pool
                 </span>
               </div>
-              <button onClick={() => setShowStoryForm(v => !v)} style={{ ...btnStyle("#6366f1", "#fff"), marginTop: 0 }}>
-                {showStoryForm ? "Cancel" : "+ New Story"}
-              </button>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  onClick={async () => {
+                    setAiScoringStories(true);
+                    setStoryScoreError("");
+                    try {
+                      const scored = await scoreStoriesAI(job.id, provider, apiKey || undefined);
+                      setStories(scored);
+                    } catch (e: unknown) {
+                      setStoryScoreError(e instanceof Error ? e.message : "AI scoring failed");
+                    } finally {
+                      setAiScoringStories(false);
+                    }
+                  }}
+                  disabled={aiScoringStories}
+                  style={{ ...btnStyle("#7c3aed", "#fff"), marginTop: 0, fontSize: 11, padding: "4px 10px" }}
+                >
+                  {aiScoringStories ? "Scoring…" : "🤖 AI Score"}
+                </button>
+                <button onClick={() => setShowStoryForm(v => !v)} style={{ ...btnStyle("#6366f1", "#fff"), marginTop: 0 }}>
+                  {showStoryForm ? "Cancel" : "+ New Story"}
+                </button>
+              </div>
             </div>
+            {storyScoreError && <div style={{ fontSize: 12, color: "#dc2626", marginBottom: 8 }}>{storyScoreError}</div>}
             <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 12 }}>
-              Link stories from your pool to this job, or create a new one below.
+              Keyword-ranked by default · click 🤖 AI Score for smarter relevance scoring.
             </div>
 
             {showStoryForm && (
@@ -471,8 +494,23 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
                               </span>
                             )}
                             {s.relevance_score !== undefined && s.relevance_score > 0 && (
-                              <span style={{ fontSize: 11, color: "#94a3b8" }}>
-                                relevance: {s.relevance_score}
+                              <span
+                                title={s.ai_reason || "keyword overlap score"}
+                                style={{
+                                  fontSize: 11, fontWeight: 700, padding: "1px 7px", borderRadius: 99,
+                                  background: s.ai_reason
+                                    ? (s.relevance_score >= 70 ? "#f0fdf4" : s.relevance_score >= 40 ? "#fefce8" : "#f8fafc")
+                                    : "#f8fafc",
+                                  color: s.ai_reason
+                                    ? (s.relevance_score >= 70 ? "#16a34a" : s.relevance_score >= 40 ? "#ca8a04" : "#94a3b8")
+                                    : "#94a3b8",
+                                  border: `1px solid ${s.ai_reason
+                                    ? (s.relevance_score >= 70 ? "#bbf7d0" : s.relevance_score >= 40 ? "#fef08a" : "#e2e8f0")
+                                    : "#e2e8f0"}`,
+                                  cursor: s.ai_reason ? "help" : "default",
+                                }}
+                              >
+                                {s.ai_reason ? `AI ${s.relevance_score}` : `kw ${s.relevance_score}`}
                               </span>
                             )}
                           </div>

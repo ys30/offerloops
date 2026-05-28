@@ -430,6 +430,7 @@ export interface Story {
   updated_at?: string;
   // from recommend endpoint
   relevance_score?: number;
+  ai_reason?: string;
   linked?: boolean;
 }
 
@@ -498,6 +499,21 @@ export async function polishStory(
 export async function recommendStories(jobId: string): Promise<Story[]> {
   const res = await fetch(`${BASE}/stories/recommend?job_id=${jobId}`, { headers: authHeaders() });
   if (!res.ok) return [];
+  return res.json();
+}
+
+export async function scoreStoriesAI(
+  jobId: string,
+  provider = "nvidia",
+  apiKey?: string,
+): Promise<Story[]> {
+  const qs = new URLSearchParams({ job_id: jobId, provider });
+  if (apiKey) qs.set("api_key", apiKey);
+  const res = await fetch(`${BASE}/stories/score-ai?${qs}`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await safeDetail(res, "AI scoring failed"));
   return res.json();
 }
 

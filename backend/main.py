@@ -637,17 +637,88 @@ def recommend_stories(job_id: str = Query(...), user_id: str = Depends(_require_
     job = db.get(JobRow, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    job_text = f"{job.title} {job.description or ''} {job.tags or ''}".lower()
-    job_words = set(w for w in job_text.split() if len(w) > 4)
+    # Include ai_tags; match words ≥ 3 chars so "GIS", "SQL", "EPA" count
+    ai_tags_text = " ".join(_j.loads(job.ai_tags or "[]"))
+    job_text = f"{job.title} {job.description or ''} {job.tags or ''} {ai_tags_text}".lower()
+    job_words = set(w for w in job_text.split() if len(w) >= 3)
     rows = db.query(StoryRow).filter(StoryRow.user_id == user_id).all()
     scored = []
     for r in rows:
-        story_text = f"{r.title} {r.situation or ''} {r.task or ''} {r.action or ''} {r.result or ''} {r.skills or ''}".lower()
+        skills_text = " ".join(_j.loads(r.skills or "[]"))
+        story_text = f"{r.title} {r.situation or ''} {r.task or ''} {r.action or ''} {r.result or ''} {skills_text}".lower()
         overlap = len(job_words & set(story_text.split()))
         linked = job_id in _j.loads(r.linked_job_ids or "[]")
         scored.append({**_story_out(r), "relevance_score": overlap, "linked": linked})
     scored.sort(key=lambda x: (x["linked"], x["relevance_score"]), reverse=True)
     return scored
+
+
+@app.post("/api/stories/score-ai", tags=["stories"])
+async def score_stories_ai(
+    job_id: str = Query(...),
+    provider: str = Query("nvidia"),
+    api_key: Optional[str] = Query(None),
+    user_id: str = Depends(_require_user),
+    db: Session = Depends(get_db),
+):
+    """Score all pool stories against a job using AI (0–100 per story)."""
+    import json as _j
+    job = db.get(JobRow, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    rows = db.query(StoryRow).filter(StoryRow.user_id == user_id).all()
+    if not rows:
+        return []
+
+    linked_set = set()
+    for r in rows:
+        if job_id in _j.loads(r.linked_job_ids or "[]"):
+            linked_set.add(r.id)
+
+    stories_text = "\n".join(
+        f'ID:{r.id}\nTitle:{r.title}\nSkills:{" ".join(_j.loads(r.skills or "[]"))}\nResult:{(r.result or "")[:200]}'
+        for r in rows
+    )
+    prompt = f"""You are a career coach scoring STAR interview stories for relevance to a specific job.
+
+Job: {job.title} at {job.company}
+Description: {(job.description or '')[:2000]}
+Key tags: {job.tags or ''}
+
+Score each story 0–100 for interview relevance to THIS job.
+100 = perfect fit (skills, industry, scope all match).
+0 = completely irrelevant.
+Be honest — most stories should score 30–80.
+
+Stories:
+{stories_text}
+
+Return ONLY a valid JSON array, no markdown:
+[{{"id": "...", "score": 75, "reason": "one sentence max"}}]"""
+
+    try:
+        raw = await call_ai(prompt, provider=provider, api_key=api_key, max_tokens=800)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AI error: {e}")
+
+    try:
+        start, end = raw.index("["), raw.rindex("]") + 1
+        ai_scores: list[dict] = _j.loads(raw[start:end])
+    except Exception:
+        raise HTTPException(status_code=502, detail="AI returned unparseable response")
+
+    score_map = {s["id"]: s for s in ai_scores}
+    result = []
+    for r in rows:
+        ai = score_map.get(r.id, {})
+        result.append({
+            **_story_out(r),
+            "relevance_score": ai.get("score", 0),
+            "ai_reason": ai.get("reason", ""),
+            "linked": r.id in linked_set,
+        })
+    result.sort(key=lambda x: (x["linked"], x["relevance_score"]), reverse=True)
+    return result
 
 
 # ── Projects ─────────────────────────────────────────────────────────
