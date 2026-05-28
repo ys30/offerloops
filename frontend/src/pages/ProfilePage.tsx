@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { disconnectGmail, fetchGmailStatus, getToken, startGmailAuth, syncGmail, fetchProjects, createProject, updateProject, deleteProject, uploadProjectDoc, suggestProjectOutcome, type Project } from "../api";
+import StoryBankPage from "./StoryBankPage";
 import type { GmailStatus } from "../types";
 
 interface Profile {
@@ -88,6 +89,7 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
   const [uploadError, setUploadError] = useState("");
   const projectFileRef = useRef<HTMLInputElement>(null);
   const projectNameRef = useRef<HTMLInputElement>(null);
+  const [activeTab, setActiveTab] = useState<"profile" | "stories">("profile");
 
   useEffect(() => {
     fetchGmailStatus().then(setGmailStatus).catch(() => null);
@@ -332,8 +334,24 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
     if (file) handleUpload({ target: { files: [file] } } as unknown as React.ChangeEvent<HTMLInputElement>);
   }, []);
 
+  const tabBtn = (active: boolean): React.CSSProperties => ({
+    padding: "10px 22px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+    background: "none", border: "none", borderBottom: `2px solid ${active ? "#2563eb" : "transparent"}`,
+    color: active ? "#2563eb" : "#64748b", marginBottom: -2,
+  });
+
   return (
     <div style={{ maxWidth: 780, margin: "0 auto", padding: "0 16px 80px" }}>
+      {/* Tab bar */}
+      <div style={{ display: "flex", borderBottom: "2px solid #e2e8f0", marginBottom: 24, marginTop: 8 }}>
+        <button onClick={() => setActiveTab("profile")} style={tabBtn(activeTab === "profile")}>👤 Profile</button>
+        <button onClick={() => setActiveTab("stories")} style={tabBtn(activeTab === "stories")}>📚 Stories</button>
+      </div>
+
+      {activeTab === "stories" ? (
+        <StoryBankPage onBack={() => setActiveTab("profile")} />
+      ) : (<>
+
       <h1 style={{ marginTop: 20, marginBottom: 4, fontSize: 22 }}>My Profile</h1>
       <p style={{ color: "#64748b", fontSize: 13, marginTop: 0, marginBottom: 24 }}>
         Your resume is stored here and used automatically for one-click application packs.
@@ -744,6 +762,7 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
           </button>
         </div>
       </section>
+      </>)}
     </div>
   );
 }

@@ -27,7 +27,7 @@ export default function App() {
   const [showTracker, setShowTracker] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
   const [showMarket, setShowMarket] = useState(false);
-  const [showStories, setShowStories] = useState(false);
+  const [showStories] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -139,8 +139,8 @@ export default function App() {
     onProfile:   () => { setShowProfile(true); setShowDashboard(false); setShowMarket(false); setShowTracker(false); setShowStories(false); },
     onDashboard: () => { setShowDashboard(true); setShowProfile(false); setShowMarket(false); setShowTracker(false); setShowStories(false); },
     onMarket:    () => { setShowMarket(true); setShowProfile(false); setShowDashboard(false); setShowTracker(false); setShowStories(false); },
-    onTracker:   () => { setShowTracker(true); setShowProfile(false); setShowDashboard(false); setShowMarket(false); setShowStories(false); },
-    onStories:   () => { setShowStories(true); setShowProfile(false); setShowDashboard(false); setShowMarket(false); setShowTracker(false); },
+    onTracker:   () => { setShowTracker(true); setShowProfile(false); setShowDashboard(false); setShowMarket(false); },
+    onStories:   () => {},
     onLogout:    handleLogout,
     onSignIn:    () => setShowAuthModal(true),
   };
@@ -175,7 +175,7 @@ export default function App() {
         {showAuthModal && <AuthPage onAuth={handleAuth} onClose={() => { setShowAuthModal(false); setResetToken(null); }} resetToken={resetToken} />}
         <Header {...headerProps} dashboardActive />
         <main style={{ ...mainStyle, maxWidth: 1140 }}>
-          <DashboardPage onSelectJob={id => { setShowDashboard(false); setSelectedId(id); }} onStories={() => { setShowStories(true); setShowDashboard(false); }} />
+          <DashboardPage onSelectJob={id => { setShowDashboard(false); setSelectedId(id); }} onStories={() => { setShowProfile(true); setShowDashboard(false); }} />
         </main>
       </div>
     );
@@ -193,17 +193,6 @@ export default function App() {
     );
   }
 
-  if (showStories) {
-    return (
-      <div style={pageStyle}>
-        {showAuthModal && <AuthPage onAuth={handleAuth} onClose={() => { setShowAuthModal(false); setResetToken(null); }} resetToken={resetToken} />}
-        <Header {...headerProps} storiesActive />
-        <main style={{ ...mainStyle, maxWidth: 900 }}>
-          <StoryBankPage onBack={goJobs} />
-        </main>
-      </div>
-    );
-  }
 
   if (selected) {
     return (
@@ -394,7 +383,6 @@ function Header({ stats, user, onJobs, onProfile, onLogout, onSignIn, onDashboar
         <button onClick={onTracker} style={navBtn(trackerActive)}>📋 Tracker</button>
         <button onClick={onDashboard} style={navBtn(dashboardActive)}>📊 Dashboard</button>
         <button onClick={onMarket} style={navBtn(marketActive)}>🌐 Market</button>
-        <button onClick={onStories} style={navBtn(storiesActive)}>📚 Stories</button>
         <button onClick={onProfile} style={navBtn(profileActive)}>👤 Profile</button>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
