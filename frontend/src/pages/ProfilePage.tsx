@@ -358,6 +358,54 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
         {profile?.updated_at && ` Last updated: ${profile.updated_at.slice(0, 10)}`}
       </p>
 
+      {/* AI Settings */}
+      <section style={{ ...card, marginBottom: 16, background: "#faf5ff", border: "1px solid #e9d5ff" }}>
+        <h2 style={{ ...sectionTitle, margin: "0 0 4px", color: "#6d28d9" }}>🤖 AI Settings</h2>
+        <p style={{ fontSize: 12, color: "#7c3aed", margin: "0 0 14px" }}>
+          Used for all AI features — job scoring, resume generation, story analysis, project extraction.
+        </p>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div>
+            <label style={{ ...lbl, color: "#6d28d9" }}>Provider</label>
+            <select
+              value={aiProvider}
+              onChange={e => { setAiProvider(e.target.value); localStorage.setItem("ol_ai_provider", e.target.value); }}
+              style={{ padding: "8px 10px", border: "1px solid #d8b4fe", borderRadius: 6, fontSize: 13, background: "#fff", cursor: "pointer" }}
+            >
+              <option value="nvidia">NVIDIA NIM (Llama 3.3 70B)</option>
+              <option value="anthropic">Claude (Anthropic)</option>
+              <option value="openai">OpenAI (GPT-4o)</option>
+              <option value="gemini">Google Gemini</option>
+            </select>
+          </div>
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <label style={{ ...lbl, color: "#6d28d9" }}>API Key</label>
+            <input
+              type="password"
+              value={aiKey}
+              onChange={e => { setAiKey(e.target.value); localStorage.setItem("ol_ai_key", e.target.value); }}
+              placeholder="Paste your API key here…"
+              style={{ ...inp, borderColor: "#d8b4fe" }}
+            />
+          </div>
+          <button
+            onClick={() => {
+              localStorage.setItem("ol_ai_key", aiKey);
+              localStorage.setItem("ol_ai_provider", aiProvider);
+              flash("AI settings saved.");
+            }}
+            style={{ ...primaryBtn, background: "#7c3aed", marginBottom: 1 }}
+          >
+            Save
+          </button>
+        </div>
+        {aiKey && (
+          <div style={{ marginTop: 8, fontSize: 11, color: "#7c3aed" }}>
+            ✓ Key saved — {aiProvider} · ends in …{aiKey.slice(-6)}
+          </div>
+        )}
+      </section>
+
       {msg && (
         <div style={{
           padding: "10px 14px", borderRadius: 7, marginBottom: 16, fontSize: 13, fontWeight: 600,
