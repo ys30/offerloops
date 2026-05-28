@@ -82,8 +82,8 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
   const [savingProject, setSavingProject] = useState(false);
   const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
   const [uploadingDoc, setUploadingDoc] = useState(false);
-  const [aiProvider, setAiProvider] = useState("nvidia");
-  const [aiKey, setAiKey] = useState("");
+  const [aiProvider, setAiProvider] = useState(() => localStorage.getItem("ol_ai_provider") || "nvidia");
+  const [aiKey, setAiKey] = useState(() => localStorage.getItem("ol_ai_key") || "");
   const [projectFormError, setProjectFormError] = useState("");
   const [suggestingOutcome, setSuggestingOutcome] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -543,14 +543,14 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
             Upload a PDF, DOCX, or TXT file — AI will extract the project name, role, tech stack, and outcomes automatically.
           </p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <select value={aiProvider} onChange={e => setAiProvider(e.target.value)}
+            <select value={aiProvider} onChange={e => { setAiProvider(e.target.value); localStorage.setItem("ol_ai_provider", e.target.value); }}
               style={{ padding: "6px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, background: "#fff", cursor: "pointer" }}>
               <option value="nvidia">NVIDIA NIM</option>
               <option value="anthropic">Claude</option>
               <option value="openai">OpenAI</option>
               <option value="gemini">Gemini</option>
             </select>
-            <input type="password" value={aiKey} onChange={e => setAiKey(e.target.value)}
+            <input type="password" value={aiKey} onChange={e => { setAiKey(e.target.value); localStorage.setItem("ol_ai_key", e.target.value); }}
               placeholder="API key (blank if set on server)"
               style={{ padding: "6px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 220, boxSizing: "border-box" }} />
             <button

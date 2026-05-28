@@ -32,8 +32,8 @@ const PROVIDERS = [
 
 export default function JobDetail({ job, onBack, onDeleted }: Props) {
   const [resume, setResume] = useState("");
-  const [provider, setProvider] = useState("nvidia");
-  const [apiKey, setApiKey] = useState("");
+  const [provider, setProvider] = useState(() => localStorage.getItem("ol_ai_provider") || "nvidia");
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem("ol_ai_key") || "");
   const [analyzing, setAnalyzing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
@@ -239,7 +239,7 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
             {PROVIDERS.map(p => (
               <button
                 key={p.id}
-                onClick={() => setProvider(p.id)}
+                onClick={() => { setProvider(p.id); localStorage.setItem("ol_ai_provider", p.id); }}
                 style={{
                   padding: "5px 12px",
                   fontSize: 12,
@@ -265,7 +265,7 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
           <input
             type="password"
             value={apiKey}
-            onChange={e => setApiKey(e.target.value)}
+            onChange={e => { setApiKey(e.target.value); localStorage.setItem("ol_ai_key", e.target.value); }}
             placeholder={`${PROVIDERS.find(p => p.id === provider)?.label} API key (optional if set on server)`}
             style={{ ...inputStyle, marginTop: 8 }}
           />
