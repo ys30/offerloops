@@ -194,6 +194,7 @@ export default function TrackerPage({ user, onSelectJob }: Props) {
                       emailEvents={eventsByJob[job.id] ?? []}
                       onOpen={() => onSelectJob(job.id)}
                       onMove={newStatus => moveJob(job.id, newStatus)}
+                      onRemove={() => moveJob(job.id, "new")}
                     />
                   ))}
                 </div>
@@ -206,12 +207,13 @@ export default function TrackerPage({ user, onSelectJob }: Props) {
   );
 }
 
-function TrackerCard({ job, currentCol, emailEvents, onOpen, onMove }: {
+function TrackerCard({ job, currentCol, emailEvents, onOpen, onMove, onRemove }: {
   job: Job;
   currentCol: typeof COLUMNS[number];
   emailEvents: EmailEvent[];
   onOpen: () => void;
   onMove: (status: string) => void;
+  onRemove: () => void;
 }) {
   const [moving, setMoving] = useState(false);
   const [showEmails, setShowEmails] = useState(false);
@@ -220,6 +222,13 @@ function TrackerCard({ job, currentCol, emailEvents, onOpen, onMove }: {
     setMoving(true);
     await onMove(e.target.value);
     setMoving(false);
+  }
+
+  async function handleRemove(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm(`Remove "${job.title}" from tracker?`)) return;
+    setMoving(true);
+    await onRemove();
   }
 
   const latestEmail = emailEvents[0];
@@ -306,14 +315,14 @@ function TrackerCard({ job, currentCol, emailEvents, onOpen, onMove }: {
         </div>
       )}
 
-      {/* Move dropdown */}
-      <div style={{ padding: "6px 10px", borderTop: "1px solid #f1f5f9" }}>
+      {/* Move dropdown + remove */}
+      <div style={{ padding: "6px 10px", borderTop: "1px solid #f1f5f9", display: "flex", gap: 6, alignItems: "center" }}>
         <select
           value={currentCol.key}
           onChange={handleMove}
           onClick={e => e.stopPropagation()}
           style={{
-            width: "100%", fontSize: 11, padding: "4px 6px",
+            flex: 1, fontSize: 11, padding: "4px 6px",
             border: `1px solid ${currentCol.color}40`,
             borderRadius: 5, color: currentCol.color,
             background: currentCol.bg, cursor: "pointer", fontWeight: 600,
@@ -321,6 +330,17 @@ function TrackerCard({ job, currentCol, emailEvents, onOpen, onMove }: {
         >
           {COLUMNS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
         </select>
+        <button
+          onClick={handleRemove}
+          title="Remove from tracker"
+          style={{
+            padding: "3px 8px", fontSize: 12, fontWeight: 700,
+            background: "#fef2f2", color: "#dc2626",
+            border: "1px solid #fecaca", borderRadius: 5, cursor: "pointer", flexShrink: 0,
+          }}
+        >
+          ✕
+        </button>
       </div>
     </div>
   );
