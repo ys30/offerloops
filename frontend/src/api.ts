@@ -508,10 +508,10 @@ export async function scoreStoriesAI(
   apiKey?: string,
 ): Promise<Story[]> {
   const qs = new URLSearchParams({ job_id: jobId, provider });
-  if (apiKey) qs.set("api_key", apiKey);
   const res = await fetch(`${BASE}/stories/score-ai?${qs}`, {
     method: "POST",
-    headers: authHeaders(),
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ api_key: apiKey || null }),
   });
   if (!res.ok) throw new Error(await safeDetail(res, "AI scoring failed"));
   return res.json();

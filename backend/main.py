@@ -655,14 +655,19 @@ def recommend_stories(job_id: str = Query(...), user_id: str = Depends(_require_
 
 @app.post("/api/stories/score-ai", tags=["stories"])
 async def score_stories_ai(
+    request: Request,
     job_id: str = Query(...),
     provider: str = Query("nvidia"),
-    api_key: Optional[str] = Query(None),
     user_id: str = Depends(_require_user),
     db: Session = Depends(get_db),
 ):
     """Score all pool stories against a job using AI (0–100 per story)."""
     import json as _j
+    try:
+        body = await request.json()
+        api_key: Optional[str] = body.get("api_key") or None
+    except Exception:
+        api_key = None
     job = db.get(JobRow, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
