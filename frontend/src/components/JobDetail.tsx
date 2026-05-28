@@ -231,6 +231,79 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
           </section>
         )}
 
+        <section style={{ marginTop: 24, padding: 16, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+          <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>AI Job Fit Analysis</h3>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+            {PROVIDERS.map(p => (
+              <button
+                key={p.id}
+                onClick={() => setProvider(p.id)}
+                style={{
+                  padding: "5px 12px",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 5,
+                  cursor: "pointer",
+                  background: provider === p.id ? "#2563eb" : "#fff",
+                  color: provider === p.id ? "#fff" : "#374151",
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <textarea
+            value={resume}
+            onChange={e => setResume(e.target.value)}
+            placeholder="Paste your resume here — or leave blank to use your saved profile resume"
+            rows={5}
+            style={textareaStyle}
+          />
+          <input
+            type="password"
+            value={apiKey}
+            onChange={e => setApiKey(e.target.value)}
+            placeholder={`${PROVIDERS.find(p => p.id === provider)?.label} API key (optional if set on server)`}
+            style={{ ...inputStyle, marginTop: 8 }}
+          />
+          {error && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 6 }}>{error}</div>}
+          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            <button
+              onClick={handleAnalyze}
+              disabled={analyzing || generating}
+              style={btnStyle("#2563eb", "#fff")}
+            >
+              {analyzing ? "Scoring…" : `Score fit`}
+            </button>
+            <button
+              onClick={async () => {
+                setGenerating(true);
+                setError("");
+                try {
+                  const r = await generateApplicationPack(job.id, resume, provider, apiKey || undefined);
+                  setPack(r);
+                } catch (e: unknown) {
+                  setError(e instanceof Error ? e.message : String(e));
+                } finally {
+                  setGenerating(false);
+                }
+              }}
+              disabled={analyzing || generating}
+              style={btnStyle("#059669", "#fff")}
+            >
+              {generating ? "Generating…" : "⚡ One-click Resume + Cover Letter"}
+            </button>
+          </div>
+        </section>
+
+        {pack && (
+          <ApplicationPack
+            result={pack as unknown as Parameters<typeof ApplicationPack>[0]["result"]}
+            onClose={() => setPack(null)}
+          />
+        )}
+
         {/* Status tracker */}
         <section style={{ marginTop: 24, padding: 16, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -317,81 +390,12 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
           </section>
         )}
 
-        <section style={{ marginTop: 24, padding: 16, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
-          <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>AI Job Fit Analysis</h3>
-          <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-            {PROVIDERS.map(p => (
-              <button
-                key={p.id}
-                onClick={() => setProvider(p.id)}
-                style={{
-                  padding: "5px 12px",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 5,
-                  cursor: "pointer",
-                  background: provider === p.id ? "#2563eb" : "#fff",
-                  color: provider === p.id ? "#fff" : "#374151",
-                }}
-              >
-                {p.label}
-              </button>
-            ))}
+        {/* STAR Story Bank — shown for jobs scoring ≥ 70 */}
+        {getToken() && score !== null && score !== undefined && score < 70 ? (
+          <div style={{ marginTop: 24, padding: "12px 16px", background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, color: "#94a3b8", textAlign: "center" }}>
+            📖 STAR Stories available for jobs scoring ≥ 70 — score this job first to unlock.
           </div>
-          <textarea
-            value={resume}
-            onChange={e => setResume(e.target.value)}
-            placeholder="Paste your resume here — or leave blank to use your saved profile resume"
-            rows={5}
-            style={textareaStyle}
-          />
-          <input
-            type="password"
-            value={apiKey}
-            onChange={e => setApiKey(e.target.value)}
-            placeholder={`${PROVIDERS.find(p => p.id === provider)?.label} API key (optional if set on server)`}
-            style={{ ...inputStyle, marginTop: 8 }}
-          />
-          {error && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 6 }}>{error}</div>}
-          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-            <button
-              onClick={handleAnalyze}
-              disabled={analyzing || generating}
-              style={btnStyle("#2563eb", "#fff")}
-            >
-              {analyzing ? "Scoring…" : `Score fit`}
-            </button>
-            <button
-              onClick={async () => {
-                setGenerating(true);
-                setError("");
-                try {
-                  const r = await generateApplicationPack(job.id, resume, provider, apiKey || undefined);
-                  setPack(r);
-                } catch (e: unknown) {
-                  setError(e instanceof Error ? e.message : String(e));
-                } finally {
-                  setGenerating(false);
-                }
-              }}
-              disabled={analyzing || generating}
-              style={btnStyle("#059669", "#fff")}
-            >
-              {generating ? "Generating…" : "⚡ One-click Resume + Cover Letter"}
-            </button>
-          </div>
-        </section>
-
-        {pack && (
-          <ApplicationPack
-            result={pack as unknown as Parameters<typeof ApplicationPack>[0]["result"]}
-            onClose={() => setPack(null)}
-          />
-        )}
-
-        {/* STAR Story Bank — pool model */}
-        {getToken() && (
+        ) : getToken() && (
           <section style={{ marginTop: 24, padding: 16, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
               <div style={{ fontWeight: 700, fontSize: 14, color: "#1e293b" }}>
