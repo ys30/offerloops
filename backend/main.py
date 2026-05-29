@@ -468,6 +468,127 @@ Rules:
         raise HTTPException(status_code=502, detail="AI returned unparseable response")
 
 
+@app.post("/api/jobs/import-url", tags=["jobs"])
+async def import_job_from_url(
+    request: Request,
+    user_id: str = Depends(_require_user),
+    db: Session = Depends(get_db),
+):
+    """Extract a job from any URL, deduplicate, and add it to the job list."""
+    import json as _j
+    from urllib.parse import urlparse
+    from bs4 import BeautifulSoup
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=422, detail="Invalid JSON body")
+    url: str = body.get("url", "").strip()
+    provider: str = body.get("provider", "nvidia")
+    api_key: Optional[str] = body.get("api_key") or None
+    if not url:
+        raise HTTPException(status_code=422, detail="url is required")
+
+    # Duplicate check by apply_url
+    existing = db.query(JobRow).filter(JobRow.apply_url == url).first()
+    if existing:
+        return {"ingested": 0, "skipped": 1, "reason": "duplicate", "existing_id": existing.id, "title": existing.title, "company": existing.company}
+
+    # Extract job data (reuse platform fetchers)
+    host = urlparse(url).hostname or ""
+    pre_extracted: dict = {}
+    page_text: str = ""
+    source_label: str = "generic"
+
+    if "myworkdayjobs.com" in host:
+        pre_extracted, page_text = await _ats_fetch_workday(url)
+        source_label = "workday"
+    elif "lever.co" in host:
+        pre_extracted, page_text = await _ats_fetch_lever(url)
+        source_label = "lever"
+    elif "greenhouse.io" in host:
+        pre_extracted, page_text = await _ats_fetch_greenhouse(url)
+        source_label = "greenhouse"
+
+    if not page_text:
+        try:
+            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as c:
+                r = await c.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; JobBot/1.0)"})
+            r.raise_for_status()
+            soup = BeautifulSoup(r.text, "html.parser")
+            for tag in soup(["script", "style", "nav", "header", "footer", "aside"]):
+                tag.decompose()
+            page_text = soup.get_text(separator="\n", strip=True)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Could not fetch URL: {e}")
+
+    pre_hint = f"\nAlready extracted:\n{_j.dumps(pre_extracted, indent=2)}\n" if pre_extracted else ""
+    prompt = f"""Extract job posting information from the text below and return ONLY valid JSON (no markdown).
+Source: {source_label}
+URL: {url}
+{pre_hint}
+Page text:
+{page_text[:8000]}
+
+Return this exact JSON structure:
+{{"title":"","company":"","location_city":"","location_state":"","location_remote":false,"description":"","requirements":[],"salary_min":null,"salary_max":null,"job_type":"full_time","tags":[]}}
+
+Rules: tags = technical skills (5-10); description = comprehensive; salary = null if not mentioned."""
+
+    try:
+        from .ai import call_ai
+        raw = await call_ai(prompt, provider=provider, api_key=api_key, max_tokens=2000)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AI error: {e}")
+
+    try:
+        start, end = raw.index("{"), raw.rindex("}") + 1
+        data = _j.loads(raw[start:end])
+        for k, v in pre_extracted.items():
+            if k not in data or not data[k]:
+                data[k] = v
+    except Exception:
+        raise HTTPException(status_code=502, detail="AI returned unparseable response")
+
+    # Duplicate check by title + company (case-insensitive) after extraction
+    title = (data.get("title") or "").strip()
+    company = (data.get("company") or "").strip()
+    if title and company:
+        dup = db.query(JobRow).filter(
+            JobRow.title.ilike(title),
+            JobRow.company.ilike(company),
+        ).first()
+        if dup:
+            return {"ingested": 0, "skipped": 1, "reason": "duplicate", "existing_id": dup.id, "title": dup.title, "company": dup.company}
+
+    # Create the job
+    now = datetime.utcnow()
+    job = Job(
+        id="manual-" + str(uuid.uuid4())[:12],
+        source=JobSource.manual,
+        title=title or "Untitled",
+        company=company or "Unknown",
+        location=JobLocation(
+            city=data.get("location_city") or "",
+            state=data.get("location_state") or "",
+            remote=bool(data.get("location_remote")),
+        ),
+        salary=SalaryRange(
+            min=data.get("salary_min"),
+            max=data.get("salary_max"),
+        ) if data.get("salary_min") or data.get("salary_max") else None,
+        description=data.get("description") or "",
+        requirements=data.get("requirements") or [],
+        tags=data.get("tags") or [],
+        job_type=data.get("job_type") or "full_time",
+        apply_url=url,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(job_to_row(job, user_id=user_id))
+    db.commit()
+    return {"ingested": 1, "skipped": 0, "job_id": job.id, "title": job.title, "company": job.company}
+
+
 @app.get("/api/jobs/{job_id}", response_model=Job, tags=["jobs"])
 def get_job(job_id: str, db: Session = Depends(get_db)):
     row = db.get(JobRow, job_id)
