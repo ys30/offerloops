@@ -65,9 +65,27 @@ export default function TrackerPage({ user, onSelectJob }: Props) {
     load();
     fetchJobs({ limit: 200 }).then(r => setAllJobs(r.jobs)).catch(() => null);
     if (user) {
-      fetchGmailStatus().then(s => {
+      fetchGmailStatus().then(async s => {
         setGmailConnected(s.connected);
         setLastSynced(s.last_synced_at ?? null);
+        // Auto-sync if Gmail is connected and last sync was >15 minutes ago (or never)
+        if (s.connected) {
+          const lastSyncMs = s.last_synced_at ? new Date(s.last_synced_at).getTime() : 0;
+          const staleMs = Date.now() - lastSyncMs;
+          if (staleMs > 15 * 60 * 1000) {
+            setSyncing(true);
+            try {
+              const r = await syncGmail(60);
+              if (r.jobs_updated > 0) {
+                setSyncMsg(`📬 Auto-synced: ${r.jobs_updated} status${r.jobs_updated !== 1 ? "es" : ""} updated`);
+              }
+              setLastSynced(new Date().toISOString());
+              await load();
+              await loadEmailEvents();
+            } catch { /* silent */ }
+            finally { setSyncing(false); }
+          }
+        }
       }).catch(() => null);
       loadEmailEvents();
     }
