@@ -650,7 +650,8 @@ def create_job(payload: JobCreate, user_id: str = Depends(_require_user), db: Se
 def update_job(job_id: str, payload: JobUpdate, user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
     from .models import APPLICATION_STATUSES
     row = db.get(JobRow, job_id)
-    if not row or row.user_id != user_id:
+    # Allow updating shared jobs (user_id=None, ingested from public boards) and user-owned jobs
+    if not row or (row.user_id is not None and row.user_id != user_id):
         raise HTTPException(status_code=404, detail="Job not found")
     for field, value in payload.model_dump(exclude_none=True).items():
         if field in ("requirements", "tags"):
@@ -673,7 +674,7 @@ def update_job(job_id: str, payload: JobUpdate, user_id: str = Depends(_require_
 @app.delete("/api/jobs/{job_id}", status_code=204, tags=["jobs"])
 def delete_job(job_id: str, user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
     row = db.get(JobRow, job_id)
-    if not row or row.user_id != user_id:
+    if not row or (row.user_id is not None and row.user_id != user_id):
         raise HTTPException(status_code=404, detail="Job not found")
     db.delete(row)
     db.commit()
