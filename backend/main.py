@@ -7,6 +7,8 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
+import httpx
+
 from pydantic import BaseModel
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
