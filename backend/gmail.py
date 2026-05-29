@@ -254,7 +254,7 @@ async def sync_emails(db, user_id: str, days_back: int = 60) -> dict:
     }
 
     # Load user's jobs for matching (company → job)
-    jobs = db.query(JobRow).all()
+    jobs = db.query(JobRow).filter(JobRow.user_id == user_id).all()
 
     for msg_stub in messages:
         msg_id = msg_stub["id"]

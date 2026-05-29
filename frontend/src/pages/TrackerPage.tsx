@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchEmailEvents, fetchFollowups, fetchGmailStatus, fetchTracker, syncGmail, updateJobStatus } from "../api";
 import type { EmailEvent, Job, User } from "../types";
+import { fetchJobs } from "../api";
 
 type FollowupJob = Job & { followup_due_days: number; days_overdue: number };
 
@@ -29,6 +30,11 @@ export default function TrackerPage({ user, onSelectJob }: Props) {
   const [followups, setFollowups] = useState<FollowupJob[]>([]);
   // email events keyed by job_id
   const [eventsByJob, setEventsByJob] = useState<Record<string, EmailEvent[]>>({});
+  // email events with no matched job
+  const [unmatchedEvents, setUnmatchedEvents] = useState<EmailEvent[]>([]);
+  // jobs available for linking
+  const [allJobs, setAllJobs] = useState<Job[]>([]);
+  const [linkingEvent, setLinkingEvent] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -43,15 +49,21 @@ export default function TrackerPage({ user, onSelectJob }: Props) {
     if (!user) return;
     const events = await fetchEmailEvents();
     const byJob: Record<string, EmailEvent[]> = {};
+    const unmatched: EmailEvent[] = [];
     for (const ev of events) {
-      if (!ev.job_id) continue;
-      (byJob[ev.job_id] ??= []).push(ev);
+      if (ev.job_id) {
+        (byJob[ev.job_id] ??= []).push(ev);
+      } else if (ev.detected_status) {
+        unmatched.push(ev);
+      }
     }
     setEventsByJob(byJob);
+    setUnmatchedEvents(unmatched);
   }, [user]);
 
   useEffect(() => {
     load();
+    fetchJobs({ limit: 200 }).then(r => setAllJobs(r.jobs)).catch(() => null);
     if (user) {
       fetchGmailStatus().then(s => {
         setGmailConnected(s.connected);
@@ -80,6 +92,19 @@ export default function TrackerPage({ user, onSelectJob }: Props) {
     } finally {
       setSyncing(false);
     }
+  }
+
+  async function linkUnmatchedToJob(eventId: string, jobId: string) {
+    setLinkingEvent(eventId);
+    try {
+      await fetch(`/api/gmail/events/${eventId}/link`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("ol_token")}` },
+        body: JSON.stringify({ job_id: jobId }),
+      });
+      await Promise.all([load(), loadEmailEvents()]);
+    } catch { /* ignore */ }
+    finally { setLinkingEvent(null); }
   }
 
   const total = Object.values(grouped).reduce((n, jobs) => n + jobs.length, 0);
@@ -161,47 +186,103 @@ export default function TrackerPage({ user, onSelectJob }: Props) {
         </div>
       )}
 
-      {total === 0 ? (
+      {total === 0 && unmatchedEvents.length === 0 ? (
         <div style={{ textAlign: "center", padding: 60, color: "#94a3b8" }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
           <div>No applications tracked yet.</div>
           <div style={{ fontSize: 13, marginTop: 6 }}>Open a job and set its status, or sync Gmail to auto-detect.</div>
         </div>
       ) : (
-        <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 16, alignItems: "flex-start" }}>
-          {COLUMNS.map(col => {
-            const jobs = grouped[col.key] ?? [];
-            return (
-              <div key={col.key} style={{ minWidth: 240, maxWidth: 260, flexShrink: 0 }}>
-                <div style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  marginBottom: 10, padding: "6px 10px",
-                  background: col.bg, borderRadius: 7,
-                  borderLeft: `3px solid ${col.color}`,
-                }}>
-                  <span style={{ fontWeight: 700, fontSize: 12, color: col.color }}>{col.label}</span>
-                  <span style={{ marginLeft: "auto", fontSize: 11, color: col.color, fontWeight: 600 }}>
-                    {jobs.length}
-                  </span>
-                </div>
+        <>
+          {total > 0 && (
+            <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 16, alignItems: "flex-start" }}>
+              {COLUMNS.map(col => {
+                const jobs = grouped[col.key] ?? [];
+                return (
+                  <div key={col.key} style={{ minWidth: 240, maxWidth: 260, flexShrink: 0 }}>
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: 6,
+                      marginBottom: 10, padding: "6px 10px",
+                      background: col.bg, borderRadius: 7,
+                      borderLeft: `3px solid ${col.color}`,
+                    }}>
+                      <span style={{ fontWeight: 700, fontSize: 12, color: col.color }}>{col.label}</span>
+                      <span style={{ marginLeft: "auto", fontSize: 11, color: col.color, fontWeight: 600 }}>
+                        {jobs.length}
+                      </span>
+                    </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {jobs.map(job => (
-                    <TrackerCard
-                      key={job.id}
-                      job={job}
-                      currentCol={col}
-                      emailEvents={eventsByJob[job.id] ?? []}
-                      onOpen={() => onSelectJob(job.id)}
-                      onMove={newStatus => moveJob(job.id, newStatus)}
-                      onRemove={() => moveJob(job.id, "new")}
-                    />
-                  ))}
-                </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {jobs.map(job => (
+                        <TrackerCard
+                          key={job.id}
+                          job={job}
+                          currentCol={col}
+                          emailEvents={eventsByJob[job.id] ?? []}
+                          onOpen={() => onSelectJob(job.id)}
+                          onMove={newStatus => moveJob(job.id, newStatus)}
+                          onRemove={() => moveJob(job.id, "new")}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {unmatchedEvents.length > 0 && (
+            <div style={{ marginTop: total > 0 ? 24 : 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", marginBottom: 10 }}>
+                📬 Email-detected applications not yet linked to a job ({unmatchedEvents.length})
               </div>
-            );
-          })}
-        </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {unmatchedEvents.map(ev => (
+                  <div key={ev.id} style={{
+                    background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8,
+                    padding: "10px 14px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+                  }}>
+                    <div style={{ flex: 1, minWidth: 200 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: "#1e293b" }}>
+                        {ev.company_guess || "Unknown company"}
+                        {ev.role_guess && <span style={{ fontWeight: 400, color: "#64748b" }}> — {ev.role_guess}</span>}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
+                        {ev.email_date ? new Date(ev.email_date).toLocaleDateString() : ""} · {ev.subject}
+                      </div>
+                    </div>
+                    {ev.detected_status && (
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99, whiteSpace: "nowrap",
+                        background: STATUS_COLORS[ev.detected_status] ? STATUS_COLORS[ev.detected_status] + "22" : "#f1f5f9",
+                        color: STATUS_COLORS[ev.detected_status] ?? "#64748b",
+                        border: `1px solid ${STATUS_COLORS[ev.detected_status] ?? "#e2e8f0"}40`,
+                      }}>
+                        {ev.detected_status.replace("_", " ")}
+                      </span>
+                    )}
+                    <select
+                      defaultValue=""
+                      disabled={linkingEvent === ev.id}
+                      onChange={e => { if (e.target.value) linkUnmatchedToJob(ev.id, e.target.value); }}
+                      onClick={e => e.stopPropagation()}
+                      style={{
+                        fontSize: 11, padding: "4px 8px", borderRadius: 6,
+                        border: "1px solid #cbd5e1", background: "#f8fafc", cursor: "pointer",
+                        color: "#374151", maxWidth: 200,
+                      }}
+                    >
+                      <option value="">Link to job…</option>
+                      {allJobs.map(j => (
+                        <option key={j.id} value={j.id}>{j.company} — {j.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

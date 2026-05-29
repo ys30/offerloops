@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Job } from "../types";
 
 const STATUS_COLORS: Record<string, { color: string; bg: string }> = {
@@ -41,11 +42,35 @@ function formatLocation(job: Job): string {
 interface Props {
   job: Job;
   onSelect: (id: string) => void;
+  onStatusChange?: (jobId: string, status: string) => void;
 }
 
-export default function JobCard({ job, onSelect }: Props) {
+const STATUS_OPTIONS = [
+  { key: "new",          label: "New" },
+  { key: "interested",   label: "Interested" },
+  { key: "applied",      label: "Applied" },
+  { key: "phone_screen", label: "Phone Screen" },
+  { key: "interview",    label: "Interview" },
+  { key: "offer",        label: "Offer" },
+  { key: "rejected",     label: "Rejected" },
+  { key: "withdrawn",    label: "Withdrawn" },
+];
+
+export default function JobCard({ job, onSelect, onStatusChange }: Props) {
+  const [currentStatus, setCurrentStatus] = useState(job.status || "new");
+  const [saving, setSaving] = useState(false);
   const color = SOURCE_COLORS[job.source] ?? "#555";
   const score = job.ai_score;
+
+  async function handleStatusChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    e.stopPropagation();
+    const newStatus = e.target.value;
+    setCurrentStatus(newStatus);
+    if (!onStatusChange) return;
+    setSaving(true);
+    try { await onStatusChange(job.id, newStatus); }
+    finally { setSaving(false); }
+  }
 
   return (
     <div
@@ -93,19 +118,37 @@ export default function JobCard({ job, onSelect }: Props) {
         <span style={{ fontSize: 11, background: color + "22", color, borderRadius: 4, padding: "1px 7px", fontWeight: 600 }}>
           {job.source.toUpperCase()}
         </span>
-        {job.status && job.status !== "new" && STATUS_COLORS[job.status] && (
-          <span style={{
-            fontSize: 11, fontWeight: 600, borderRadius: 4, padding: "1px 7px",
-            background: STATUS_COLORS[job.status].bg,
-            color: STATUS_COLORS[job.status].color,
-          }}>
-            {STATUS_LABELS[job.status]}
-          </span>
-        )}
         {job.location.remote && (
           <span style={{ fontSize: 11, background: "#e0f2fe", color: "#0369a1", borderRadius: 4, padding: "1px 7px" }}>
             Remote
           </span>
+        )}
+        {onStatusChange ? (
+          <select
+            value={currentStatus}
+            onChange={handleStatusChange}
+            onClick={e => e.stopPropagation()}
+            disabled={saving}
+            style={{
+              fontSize: 11, fontWeight: 600, padding: "2px 6px", borderRadius: 4, cursor: "pointer",
+              border: `1px solid ${STATUS_COLORS[currentStatus]?.color ?? "#e2e8f0"}40`,
+              background: STATUS_COLORS[currentStatus]?.bg ?? "#f8fafc",
+              color: STATUS_COLORS[currentStatus]?.color ?? "#64748b",
+              opacity: saving ? 0.6 : 1,
+            }}
+          >
+            {STATUS_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+          </select>
+        ) : (
+          currentStatus && currentStatus !== "new" && STATUS_COLORS[currentStatus] && (
+            <span style={{
+              fontSize: 11, fontWeight: 600, borderRadius: 4, padding: "1px 7px",
+              background: STATUS_COLORS[currentStatus].bg,
+              color: STATUS_COLORS[currentStatus].color,
+            }}>
+              {STATUS_LABELS[currentStatus]}
+            </span>
+          )
         )}
       </div>
 

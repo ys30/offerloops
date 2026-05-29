@@ -2535,6 +2535,41 @@ def gmail_events(
     ]
 
 
+@app.patch("/api/gmail/events/{event_id}/link", tags=["gmail"])
+def link_email_event(
+    event_id: str,
+    body: dict,
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    db: Session = Depends(get_db),
+):
+    """Link an email event to a job and optionally update the job's status."""
+    user_id = decode_token(credentials.credentials)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ev = db.query(EmailEventRow).filter(EmailEventRow.id == event_id, EmailEventRow.user_id == user_id).first()
+    if not ev:
+        raise HTTPException(status_code=404, detail="Event not found")
+    job_id = body.get("job_id")
+    if not job_id:
+        raise HTTPException(status_code=400, detail="job_id required")
+    job = db.query(JobRow).filter(JobRow.id == job_id, JobRow.user_id == user_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    ev.job_id = job_id
+    # Auto-advance job status if the email detected a higher-pipeline stage
+    if ev.detected_status:
+        from .gmail import pipeline_rank
+        current_rank = pipeline_rank(job.status or "new")
+        new_rank = pipeline_rank(ev.detected_status)
+        if new_rank > current_rank:
+            job.status = ev.detected_status
+            if ev.detected_status == "applied" and not job.applied_date:
+                job.applied_date = ev.email_date
+            job.updated_at = datetime.utcnow()
+    db.commit()
+    return {"ok": True}
+
+
 # ── Stats ────────────────────────────────────────────────────────────
 
 

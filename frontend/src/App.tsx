@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { fetchJobs, fetchStats, fetchMe, getToken } from "./api";
+import { fetchJobs, fetchStats, fetchMe, getToken, updateJobStatus } from "./api";
 import IndustryMultiSelect from "./components/IndustryMultiSelect";
 import type { Job, Stats, User } from "./types";
 import JobCard from "./components/JobCard";
@@ -306,7 +306,15 @@ export default function App() {
               {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} of {total} job{total !== 1 ? "s" : ""}
             </div>
             {jobs.map(j => (
-              <JobCard key={j.id} job={j} onSelect={setSelectedId} />
+              <JobCard
+                key={j.id}
+                job={j}
+                onSelect={setSelectedId}
+                onStatusChange={user ? async (jobId, status) => {
+                  await updateJobStatus(jobId, status);
+                  setJobs(prev => prev.map(x => x.id === jobId ? { ...x, status } : x));
+                } : undefined}
+              />
             ))}
             {total > PAGE_SIZE && (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, padding: "16px 0" }}>
