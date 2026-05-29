@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createJob, extractJobFromUrl } from "../api";
+import { createJob, extractJobFromText, extractJobFromUrl } from "../api";
 
 interface Props {
   onCreated: () => void;
@@ -22,12 +22,31 @@ export default function AddJobForm({ onCreated, onClose }: Props) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [importTab, setImportTab] = useState<"url" | "paste">("url");
   const [extractUrl, setExtractUrl] = useState("");
+  const [pasteText, setPasteText] = useState("");
+  const [pasteApplyUrl, setPasteApplyUrl] = useState("");
   const [extracting, setExtracting] = useState(false);
   const [extractSource, setExtractSource] = useState<string | null>(null);
 
   function set(key: string, value: unknown) {
     setForm(f => ({ ...f, [key]: value }));
+  }
+
+  function applyExtracted(data: Record<string, unknown>, fallbackUrl?: string) {
+    setForm(f => ({
+      ...f,
+      title: (data.title as string) || f.title,
+      company: (data.company as string) || f.company,
+      location_city: (data.location_city as string) || f.location_city,
+      location_state: (data.location_state as string) || f.location_state,
+      location_remote: (data.location_remote as boolean) ?? f.location_remote,
+      description: (data.description as string) || f.description,
+      apply_url: (data.apply_url as string) || fallbackUrl || f.apply_url,
+      salary_min: data.salary_min != null ? String(data.salary_min) : f.salary_min,
+      salary_max: data.salary_max != null ? String(data.salary_max) : f.salary_max,
+      tags: Array.isArray(data.tags) ? (data.tags as string[]).join(", ") : f.tags,
+    }));
   }
 
   function detectSource(url: string): string {
@@ -50,19 +69,25 @@ export default function AddJobForm({ onCreated, onClose }: Props) {
       const apiKey = localStorage.getItem("ol_ai_key") || undefined;
       const data = await extractJobFromUrl(extractUrl.trim(), provider, apiKey);
       setExtractSource(detectSource(extractUrl.trim()));
-      setForm(f => ({
-        ...f,
-        title: (data.title as string) || f.title,
-        company: (data.company as string) || f.company,
-        location_city: (data.location_city as string) || f.location_city,
-        location_state: (data.location_state as string) || f.location_state,
-        location_remote: (data.location_remote as boolean) ?? f.location_remote,
-        description: (data.description as string) || f.description,
-        apply_url: (data.apply_url as string) || extractUrl.trim(),
-        salary_min: data.salary_min != null ? String(data.salary_min) : f.salary_min,
-        salary_max: data.salary_max != null ? String(data.salary_max) : f.salary_max,
-        tags: Array.isArray(data.tags) ? (data.tags as string[]).join(", ") : f.tags,
-      }));
+      applyExtracted(data, extractUrl.trim());
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Extraction failed");
+    } finally {
+      setExtracting(false);
+    }
+  }
+
+  async function handleExtractText() {
+    if (!pasteText.trim()) return;
+    setExtracting(true);
+    setError("");
+    setExtractSource(null);
+    try {
+      const provider = localStorage.getItem("ol_ai_provider") || "nvidia";
+      const apiKey = localStorage.getItem("ol_ai_key") || undefined;
+      const data = await extractJobFromText(pasteText.trim(), pasteApplyUrl.trim(), provider, apiKey);
+      setExtractSource("Text");
+      applyExtracted(data, pasteApplyUrl.trim());
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Extraction failed");
     } finally {
@@ -99,33 +124,83 @@ export default function AddJobForm({ onCreated, onClose }: Props) {
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#888" }}>×</button>
         </div>
 
-        {/* URL extraction */}
-        <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8, padding: "12px 14px", marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#0369a1", marginBottom: 8 }}>🔗 Extract from Job URL</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input
-              type="url"
-              value={extractUrl}
-              onChange={e => setExtractUrl(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && (e.preventDefault(), handleExtract())}
-              placeholder="https://jobs.lever.co/company/job-id or any job posting URL…"
-              style={{ ...inp, flex: 1 }}
-            />
-            <button
-              type="button"
-              onClick={handleExtract}
-              disabled={extracting || !extractUrl.trim()}
-              style={{ ...primaryBtn, background: "#0284c7", whiteSpace: "nowrap" }}
-            >
-              {extracting ? "Extracting…" : "✨ Extract"}
-            </button>
+        {/* Import panel */}
+        <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8, marginBottom: 16, overflow: "hidden" }}>
+          {/* Tab bar */}
+          <div style={{ display: "flex", borderBottom: "1px solid #bae6fd" }}>
+            {(["url", "paste"] as const).map(tab => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => { setImportTab(tab); setError(""); setExtractSource(null); }}
+                style={{
+                  flex: 1, padding: "8px 0", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer",
+                  background: importTab === tab ? "#e0f2fe" : "transparent",
+                  color: importTab === tab ? "#0284c7" : "#64748b",
+                  borderBottom: importTab === tab ? "2px solid #0284c7" : "2px solid transparent",
+                }}
+              >
+                {tab === "url" ? "🔗 From URL" : "📋 Paste Text"}
+              </button>
+            ))}
           </div>
-          <div style={{ fontSize: 11, color: "#0369a1", marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
-            <span>Paste any job link — Workday, Lever, Greenhouse, LinkedIn, USAJobs, or any URL.</span>
-            {extractSource && (
-              <span style={{ background: "#0284c7", color: "#fff", borderRadius: 99, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>
-                ✓ {extractSource}
-              </span>
+
+          <div style={{ padding: "12px 14px" }}>
+            {importTab === "url" ? (
+              <>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    type="url"
+                    value={extractUrl}
+                    onChange={e => setExtractUrl(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && (e.preventDefault(), handleExtract())}
+                    placeholder="Paste any job URL — Workday, LinkedIn, Indeed, USAJobs…"
+                    style={{ ...inp, flex: 1 }}
+                  />
+                  <button type="button" onClick={handleExtract} disabled={extracting || !extractUrl.trim()}
+                    style={{ ...primaryBtn, background: "#0284c7", whiteSpace: "nowrap" }}>
+                    {extracting ? "Extracting…" : "✨ Extract"}
+                  </button>
+                </div>
+                <div style={{ fontSize: 11, color: "#0369a1", marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span>AI reads the page and fills the form. Works best on public job boards.</span>
+                  {extractSource && (
+                    <span style={{ background: "#0284c7", color: "#fff", borderRadius: 99, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>
+                      ✓ {extractSource}
+                    </span>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <textarea
+                  value={pasteText}
+                  onChange={e => setPasteText(e.target.value)}
+                  placeholder="Copy the full job posting text from any site (LinkedIn, Workday, company careers page, email, PDF…) and paste it here."
+                  style={{ ...inp, resize: "vertical", fontFamily: "inherit", minHeight: 100, marginBottom: 8 }}
+                />
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    type="url"
+                    value={pasteApplyUrl}
+                    onChange={e => setPasteApplyUrl(e.target.value)}
+                    placeholder="Apply URL (optional)"
+                    style={{ ...inp, flex: 1 }}
+                  />
+                  <button type="button" onClick={handleExtractText} disabled={extracting || !pasteText.trim()}
+                    style={{ ...primaryBtn, background: "#0284c7", whiteSpace: "nowrap" }}>
+                    {extracting ? "Extracting…" : "✨ Extract"}
+                  </button>
+                </div>
+                <div style={{ fontSize: 11, color: "#0369a1", marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span>Works for any source — login-gated sites, PDFs, emails, recruiter messages.</span>
+                  {extractSource && (
+                    <span style={{ background: "#0284c7", color: "#fff", borderRadius: 99, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>
+                      ✓ {extractSource}
+                    </span>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </div>

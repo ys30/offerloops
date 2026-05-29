@@ -186,35 +186,55 @@ def list_jobs(
 
 
 async def _ats_fetch_workday(url: str) -> tuple[dict, str]:
-    """Use Workday CXS API to get structured job data without JS rendering."""
+    """Use Workday CXS search+detail API to get job data (2-step, no JS needed)."""
     from urllib.parse import urlparse
     from bs4 import BeautifulSoup
     p = urlparse(url)
     host = p.hostname or ""
     parts = [seg for seg in p.path.split("/") if seg]
-    # path: [locale, site, 'details', job-slug]
-    if len(parts) < 4:
+    if len(parts) < 3:
         return {}, ""
     tenant = host.split(".")[0]
     site = parts[1]
-    job_slug = parts[3]
-    api_url = f"https://{host}/wday/cxs/{tenant}/{site}/jobs/{job_slug}"
+    job_slug = parts[-1]  # last segment, e.g. Data-Specialist--Field-Based-_R00029359
+    req_id = job_slug.split("_")[-1]   # e.g. R00029359
+    hdrs = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Origin": f"https://{host}",
+    }
+    base = f"https://{host}/wday/cxs/{tenant}/{site}"
     try:
-        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as c:
-            r = await c.get(api_url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0"})
-        if r.status_code != 200:
-            return {}, ""
-        d = r.json()
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as c:
+            # Step 1: search by req ID to get the canonical externalPath
+            sr = await c.post(f"{base}/jobs", headers=hdrs,
+                              json={"appliedFacets": {}, "searchText": req_id, "limit": 1, "offset": 0})
+            if sr.status_code != 200:
+                return {}, ""
+            postings = sr.json().get("jobPostings", [])
+            if not postings:
+                return {}, ""
+            ext_path = postings[0].get("externalPath", "")
+            # ext_path: /job/{location}/{slug}
+            if not ext_path:
+                return {}, ""
+            # Step 2: fetch full job detail
+            dr = await c.get(f"https://{host}/wday/cxs/{tenant}/{site}{ext_path}", headers=hdrs)
+            if dr.status_code != 200:
+                return {}, ""
+            d = dr.json()
     except Exception:
         return {}, ""
     info = d.get("jobPostingInfo", {})
-    desc_html = d.get("jobDescription", {}).get("content", "")
+    desc_html = info.get("jobDescription", "")
     desc_text = BeautifulSoup(desc_html, "html.parser").get_text("\n", strip=True)
-    location_raw = d.get("locationsText", "")
+    location_raw = info.get("location", "")
     loc_parts = [x.strip() for x in location_raw.split(",")]
     pre = {
         "title": info.get("title", ""),
-        "company": tenant.upper(),
+        "company": tenant.upper(),  # AI will correct this from description text
         "location_city": loc_parts[0] if loc_parts else "",
         "location_state": loc_parts[1] if len(loc_parts) > 1 else "",
         "location_remote": "remote" in location_raw.lower(),
@@ -385,6 +405,64 @@ Rules:
             if k not in data or not data[k]:
                 data[k] = v
         data["apply_url"] = url
+        return data
+    except Exception:
+        raise HTTPException(status_code=502, detail="AI returned unparseable response")
+
+
+@app.post("/api/jobs/extract-text", tags=["jobs"])
+async def extract_job_from_text(request: Request):
+    """Extract job fields from pasted plain text using AI."""
+    import json as _j
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=422, detail="Invalid JSON body")
+    text: str = body.get("text", "").strip()
+    provider: str = body.get("provider", "nvidia")
+    api_key: Optional[str] = body.get("api_key") or None
+    apply_url: str = body.get("apply_url", "").strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="text is required")
+
+    prompt = f"""Extract job posting information from the pasted text below and return ONLY valid JSON (no markdown).
+
+Apply URL (if known): {apply_url or "unknown"}
+
+Pasted text:
+{text[:8000]}
+
+Return this exact JSON structure:
+{{
+  "title": "exact job title",
+  "company": "company name",
+  "location_city": "city or empty string",
+  "location_state": "state abbreviation or empty string",
+  "location_remote": true or false,
+  "description": "full job description text, preserve important details",
+  "requirements": ["requirement 1", "requirement 2"],
+  "salary_min": null or number,
+  "salary_max": null or number,
+  "job_type": "full_time or part_time or contract or internship",
+  "tags": ["skill1", "skill2"]
+}}
+
+Rules:
+- If salary not mentioned, use null
+- tags should be technical skills and keywords (5-10 items)
+- description should be comprehensive, not truncated"""
+
+    try:
+        from .ai import call_ai
+        raw = await call_ai(prompt, provider=provider, api_key=api_key, max_tokens=2000)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AI error: {e}")
+
+    try:
+        start, end = raw.index("{"), raw.rindex("}") + 1
+        data = _j.loads(raw[start:end])
+        if apply_url:
+            data["apply_url"] = apply_url
         return data
     except Exception:
         raise HTTPException(status_code=502, detail="AI returned unparseable response")
