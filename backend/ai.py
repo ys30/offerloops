@@ -320,7 +320,7 @@ def _pick_provider(preferred: str, api_key: Optional[str]) -> tuple[str, str]:
         key = os.environ.get(PROVIDERS[p]["env_key"], "")
         if key:
             return p, key
-    raise ValueError("No AI provider configured. Set at least one API key in .env.")
+    raise ValueError("No AI provider configured. Add your API key in Profile → AI Settings.")
 
 
 async def call_ai(
@@ -354,7 +354,7 @@ async def parse_search_query(
             resolved_provider = p
             break
     else:
-        raise ValueError("No AI provider configured. Set at least one API key in .env.")
+        raise ValueError("No AI provider configured. Add your API key in Profile → AI Settings.")
 
     resolved_model = model or PROVIDERS[resolved_provider]["default_model"]
     raw = await _call_provider(resolved_provider, resolved_model, SEARCH_SYSTEM, query, resolved_key)

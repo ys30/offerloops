@@ -49,21 +49,31 @@ export default function IngestPanel({ onDone }: Props) {
     setLinkResults([...results]);
     let ingested = 0, skipped = 0;
     for (let i = 0; i < linkUrls.length; i++) {
+      results[i] = { url: linkUrls[i], status: "pending", msg: "Extracting…" };
+      setLinkResults([...results]);
       try {
         const r = await importJobFromUrl(linkUrls[i], provider, apiKey);
         if (r.skipped === 1) {
-          results[i] = { url: linkUrls[i], status: "dup", msg: `Already in list: ${r.title} @ ${r.company}` };
+          results[i] = { url: linkUrls[i], status: "dup", msg: `Duplicate: ${r.title} @ ${r.company}` };
           skipped++;
         } else {
-          results[i] = { url: linkUrls[i], status: "ok", msg: `Added: ${r.title} @ ${r.company}` };
+          results[i] = { url: linkUrls[i], status: "ok", msg: `✓ ${r.title} @ ${r.company}` };
           ingested++;
         }
       } catch (e) {
-        results[i] = { url: linkUrls[i], status: "err", msg: e instanceof Error ? e.message : "Failed" };
+        const msg = e instanceof Error ? e.message : "Failed";
+        results[i] = { url: linkUrls[i], status: "err", msg };
       }
       setLinkResults([...results]);
     }
-    setMsg(`✓ ${ingested} added, ${skipped} duplicate${skipped !== 1 ? "s" : ""} skipped`);
+    // Remove successfully imported/skipped URLs from queue, keep errored ones for retry
+    const failedUrls = linkUrls.filter((_, i) => results[i]?.status === "err");
+    setLinkUrls(failedUrls);
+    const summary = [
+      ingested > 0 ? `${ingested} added` : "",
+      skipped > 0 ? `${skipped} duplicate${skipped !== 1 ? "s" : ""} skipped` : "",
+    ].filter(Boolean).join(", ");
+    setMsg(summary ? `✓ ${summary}` : "");
     if (ingested > 0) onDone();
     setRunning(false);
   }
