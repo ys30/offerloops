@@ -150,7 +150,12 @@ export async function importJobFromUrl(url: string, provider = "nvidia", apiKey?
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ url, provider, api_key: apiKey || null }),
   });
-  if (!res.ok) throw new Error(await safeDetail(res, "Import failed"));
+  if (!res.ok) {
+    let detail: string;
+    try { const b = await res.json(); detail = b.detail ?? `HTTP ${res.status}`; }
+    catch { detail = `HTTP ${res.status} — check you are logged in and API key is set in Profile`; }
+    throw new Error(detail);
+  }
   return res.json();
 }
 
