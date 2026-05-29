@@ -6,13 +6,14 @@ import { fetchJobs } from "../api";
 type FollowupJob = Job & { followup_due_days: number; days_overdue: number };
 
 const COLUMNS: { key: string; label: string; color: string; bg: string }[] = [
-  { key: "interested",   label: "Interested",   color: "#6366f1", bg: "#eef2ff" },
-  { key: "applied",      label: "Applied",      color: "#2563eb", bg: "#eff6ff" },
-  { key: "phone_screen", label: "Phone Screen", color: "#0891b2", bg: "#ecfeff" },
-  { key: "interview",    label: "Interview",    color: "#7c3aed", bg: "#f5f3ff" },
-  { key: "offer",        label: "Offer",        color: "#16a34a", bg: "#f0fdf4" },
-  { key: "rejected",     label: "Rejected",     color: "#dc2626", bg: "#fef2f2" },
-  { key: "withdrawn",    label: "Withdrawn",    color: "#94a3b8", bg: "#f8fafc" },
+  { key: "not_interested", label: "Not Interested", color: "#78716c", bg: "#f5f5f4" },
+  { key: "interested",     label: "Interested",     color: "#6366f1", bg: "#eef2ff" },
+  { key: "applied",        label: "Applied",        color: "#2563eb", bg: "#eff6ff" },
+  { key: "phone_screen",   label: "Phone Screen",   color: "#0891b2", bg: "#ecfeff" },
+  { key: "interview",      label: "Interview",      color: "#7c3aed", bg: "#f5f3ff" },
+  { key: "offer",          label: "Offer",          color: "#16a34a", bg: "#f0fdf4" },
+  { key: "rejected",       label: "Rejected",       color: "#dc2626", bg: "#fef2f2" },
+  { key: "withdrawn",      label: "Withdrawn",      color: "#94a3b8", bg: "#f8fafc" },
 ];
 
 interface Props {
@@ -446,11 +447,12 @@ function TrackerCard({ job, currentCol, emailEvents, onOpen, onMove, onRemove }:
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  applied:      "#2563eb",
-  phone_screen: "#0891b2",
-  interview:    "#7c3aed",
-  offer:        "#16a34a",
-  rejected:     "#dc2626",
-  withdrawn:    "#94a3b8",
-  interested:   "#6366f1",
+  not_interested: "#78716c",
+  interested:     "#6366f1",
+  applied:        "#2563eb",
+  phone_screen:   "#0891b2",
+  interview:      "#7c3aed",
+  offer:          "#16a34a",
+  rejected:       "#dc2626",
+  withdrawn:      "#94a3b8",
 };

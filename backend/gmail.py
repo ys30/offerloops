@@ -51,7 +51,7 @@ STATUS_RULES: list[tuple[list[str], str]] = [
 ]
 
 # Pipeline order for "don't downgrade" logic
-PIPELINE_ORDER = ["new", "interested", "applied", "phone_screen", "interview", "offer", "rejected", "withdrawn"]
+PIPELINE_ORDER = ["new", "not_interested", "interested", "applied", "phone_screen", "interview", "offer", "rejected", "withdrawn"]
 
 
 def pipeline_rank(status: str) -> int:

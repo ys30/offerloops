@@ -5,14 +5,15 @@ import type { Story } from "../api";
 import ApplicationPack from "./ApplicationPack";
 
 const STATUSES = [
-  { key: "new",          label: "New",          color: "#64748b" },
-  { key: "interested",   label: "Interested",   color: "#6366f1" },
-  { key: "applied",      label: "Applied",      color: "#2563eb" },
-  { key: "phone_screen", label: "Phone Screen", color: "#0891b2" },
-  { key: "interview",    label: "Interview",    color: "#7c3aed" },
-  { key: "offer",        label: "Offer",        color: "#16a34a" },
-  { key: "rejected",     label: "Rejected",     color: "#dc2626" },
-  { key: "withdrawn",    label: "Withdrawn",    color: "#94a3b8" },
+  { key: "new",            label: "New",            color: "#64748b" },
+  { key: "not_interested", label: "Not Interested", color: "#78716c" },
+  { key: "interested",     label: "Interested",     color: "#6366f1" },
+  { key: "applied",        label: "Applied",        color: "#2563eb" },
+  { key: "phone_screen",   label: "Phone Screen",   color: "#0891b2" },
+  { key: "interview",      label: "Interview",      color: "#7c3aed" },
+  { key: "offer",          label: "Offer",          color: "#16a34a" },
+  { key: "rejected",       label: "Rejected",       color: "#dc2626" },
+  { key: "withdrawn",      label: "Withdrawn",      color: "#94a3b8" },
 ];
 
 const STATUS_COLORS: Record<string, string> = Object.fromEntries(STATUSES.map(s => [s.key, s.color]));

@@ -42,7 +42,7 @@ class JobLocation(BaseModel):
     raw: Optional[str] = None  # original string from source
 
 
-APPLICATION_STATUSES = ["new", "interested", "applied", "phone_screen", "interview", "offer", "rejected", "withdrawn"]
+APPLICATION_STATUSES = ["new", "interested", "applied", "phone_screen", "interview", "offer", "rejected", "withdrawn", "not_interested"]
 
 
 class Job(BaseModel):
