@@ -653,6 +653,9 @@ def update_job(job_id: str, payload: JobUpdate, user_id: str = Depends(_require_
     # Allow updating shared jobs (user_id=None, ingested from public boards) and user-owned jobs
     if not row or (row.user_id is not None and row.user_id != user_id):
         raise HTTPException(status_code=404, detail="Job not found")
+    # Claim public job so it appears in this user's tracker/dashboard
+    if row.user_id is None:
+        row.user_id = user_id
     for field, value in payload.model_dump(exclude_none=True).items():
         if field in ("requirements", "tags"):
             setattr(row, field, json.dumps(value))
@@ -2269,7 +2272,10 @@ def dashboard(
     user_id = decode_token(credentials.credentials) if credentials else None
 
     # ── Funnel ──────────────────────────────────────────────────────
-    tracked = db.query(JobRow).filter(JobRow.status != "new").all()
+    funnel_q = db.query(JobRow).filter(JobRow.status != "new")
+    if user_id:
+        funnel_q = funnel_q.filter(JobRow.user_id == user_id)
+    tracked = funnel_q.all()
     sc: dict[str, int] = {}
     for j in tracked:
         sc[j.status] = sc.get(j.status, 0) + 1
@@ -2311,7 +2317,7 @@ def dashboard(
             .limit(40)
             .all()
         )
-        job_map = {j.id: j for j in db.query(JobRow).all()}
+        job_map = {j.id: j for j in db.query(JobRow).filter(JobRow.user_id == user_id).all()}
 
         for ev in events:
             job = job_map.get(ev.job_id or "")
@@ -2561,6 +2567,9 @@ def link_email_event(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     ev.job_id = job_id
+    # Claim public job so it appears in this user's tracker/dashboard
+    if job.user_id is None:
+        job.user_id = user_id
     # Auto-advance job status if the email detected a higher-pipeline stage
     if ev.detected_status:
         from .gmail import pipeline_rank

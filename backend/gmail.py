@@ -317,6 +317,9 @@ async def sync_emails(db, user_id: str, days_back: int = 60) -> dict:
 
         # Auto-update job status if we have a match and a detected status
         if matched_job and detected_status:
+            # Claim public job so it shows in this user's tracker/dashboard
+            if matched_job.user_id is None:
+                matched_job.user_id = user_id
             current_rank = pipeline_rank(matched_job.status or "new")
             new_rank = pipeline_rank(detected_status)
             if new_rank > current_rank:
