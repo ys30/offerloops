@@ -2268,7 +2268,10 @@ def dashboard(
     user_id = decode_token(credentials.credentials) if credentials else None
 
     # ── Funnel ──────────────────────────────────────────────────────
-    tracked = db.query(JobRow).filter(JobRow.status != "new").all()
+    funnel_q = db.query(JobRow).filter(JobRow.status != "new")
+    if user_id:
+        funnel_q = funnel_q.filter(JobRow.user_id == user_id)
+    tracked = funnel_q.all()
     sc: dict[str, int] = {}
     for j in tracked:
         sc[j.status] = sc.get(j.status, 0) + 1
@@ -2310,7 +2313,7 @@ def dashboard(
             .limit(40)
             .all()
         )
-        job_map = {j.id: j for j in db.query(JobRow).all()}
+        job_map = {j.id: j for j in db.query(JobRow).filter(JobRow.user_id == user_id).all()}
 
         for ev in events:
             job = job_map.get(ev.job_id or "")
