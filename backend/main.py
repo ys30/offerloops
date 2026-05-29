@@ -562,32 +562,45 @@ Rules: tags = technical skills (5-10); description = comprehensive; salary = nul
         if dup:
             return {"ingested": 0, "skipped": 1, "reason": "duplicate", "existing_id": dup.id, "title": dup.title, "company": dup.company}
 
-    # Create the job
+    # Create the job — normalize job_type (AI returns underscore, enum uses hyphen)
+    raw_jt = (data.get("job_type") or "unknown").lower().replace("_", "-")
+    try:
+        job_type_val = JobType(raw_jt)
+    except ValueError:
+        job_type_val = JobType.unknown
+
     now = datetime.utcnow()
-    job = Job(
-        id="manual-" + str(uuid.uuid4())[:12],
-        source=JobSource.manual,
-        title=title or "Untitled",
-        company=company or "Unknown",
-        location=JobLocation(
-            city=data.get("location_city") or "",
-            state=data.get("location_state") or "",
-            remote=bool(data.get("location_remote")),
-        ),
-        salary=SalaryRange(
-            min=data.get("salary_min"),
-            max=data.get("salary_max"),
-        ) if data.get("salary_min") or data.get("salary_max") else None,
-        description=data.get("description") or "",
-        requirements=data.get("requirements") or [],
-        tags=data.get("tags") or [],
-        job_type=data.get("job_type") or "full_time",
-        apply_url=url,
-        created_at=now,
-        updated_at=now,
-    )
-    db.add(job_to_row(job, user_id=user_id))
-    db.commit()
+    try:
+        job = Job(
+            id="manual-" + str(uuid.uuid4())[:12],
+            source=JobSource.manual,
+            title=title or "Untitled",
+            company=company or "Unknown",
+            location=JobLocation(
+                city=data.get("location_city") or "",
+                state=data.get("location_state") or "",
+                remote=bool(data.get("location_remote")),
+            ),
+            salary=SalaryRange(
+                min=data.get("salary_min"),
+                max=data.get("salary_max"),
+            ) if data.get("salary_min") or data.get("salary_max") else None,
+            description=data.get("description") or "",
+            requirements=data.get("requirements") or [],
+            tags=data.get("tags") or [],
+            job_type=job_type_val,
+            apply_url=url,
+            created_at=now,
+            updated_at=now,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Job model error: {e}")
+    try:
+        db.add(job_to_row(job, user_id=user_id))
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"DB error: {e}")
     return {"ingested": 1, "skipped": 0, "job_id": job.id, "title": job.title, "company": job.company}
 
 
