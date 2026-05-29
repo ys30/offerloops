@@ -686,10 +686,25 @@ def delete_job(job_id: str, user_id: str = Depends(_require_user), db: Session =
 # ── Tracker ──────────────────────────────────────────────────────────
 
 
+def _claim_orphan_jobs(db, user_id: str):
+    """Claim public jobs (user_id=NULL) that have this user's email events linked."""
+    orphans = (
+        db.query(JobRow)
+        .join(EmailEventRow, (EmailEventRow.job_id == JobRow.id) & (EmailEventRow.user_id == user_id))
+        .filter(JobRow.user_id.is_(None), JobRow.status != "new")
+        .all()
+    )
+    for job in orphans:
+        job.user_id = user_id
+    if orphans:
+        db.commit()
+
+
 @app.get("/api/tracker", tags=["tracker"])
 def get_tracker(user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
     """Return all tracked jobs (status != 'new') grouped by status."""
     from .models import APPLICATION_STATUSES
+    _claim_orphan_jobs(db, user_id)
     rows = db.query(JobRow).filter(JobRow.user_id == user_id, JobRow.status != "new").order_by(JobRow.updated_at.desc()).all()
     grouped: dict = {s: [] for s in APPLICATION_STATUSES if s != "new"}
     for row in rows:
@@ -2270,6 +2285,8 @@ def dashboard(
     from datetime import timedelta
 
     user_id = decode_token(credentials.credentials) if credentials else None
+    if user_id:
+        _claim_orphan_jobs(db, user_id)
 
     # ── Funnel ──────────────────────────────────────────────────────
     funnel_q = db.query(JobRow).filter(JobRow.status != "new")
