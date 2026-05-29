@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { fetchJobs, fetchStats, fetchMe, getToken, updateJobStatus } from "./api";
+import { fetchJobs, fetchStats, fetchMe, getToken, updateJobStatus, fetchGmailStatus, syncGmail } from "./api";
 import IndustryMultiSelect from "./components/IndustryMultiSelect";
 import type { Job, Stats, User } from "./types";
 import JobCard from "./components/JobCard";
@@ -125,6 +125,24 @@ export default function App() {
     loadJobs(page);
     loadStats();
   }, [loadJobs, loadStats, page, authChecked]);
+
+  // Background Gmail auto-sync: runs once when user logs in, silently updates job statuses
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const s = await fetchGmailStatus();
+        if (!s.connected) return;
+        const lastSyncMs = s.last_synced_at ? new Date(s.last_synced_at).getTime() : 0;
+        if (Date.now() - lastSyncMs < 15 * 60 * 1000) return; // synced recently
+        const r = await syncGmail(60);
+        if (r.jobs_updated > 0) {
+          // Reload jobs so status dropdowns/badges reflect new statuses
+          loadJobs(page);
+        }
+      } catch { /* silent — sync failure shouldn't interrupt the UI */ }
+    })();
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selected = jobs.find(j => j.id === selectedId);
 
