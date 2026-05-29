@@ -253,8 +253,14 @@ async def sync_emails(db, user_id: str, days_back: int = 60) -> dict:
         .filter(EmailEventRow.user_id == user_id).all()
     }
 
-    # Load user's jobs for matching (company → job)
-    jobs = db.query(JobRow).filter(JobRow.user_id == user_id).all()
+    # Load candidate jobs for matching:
+    # - Jobs explicitly owned by this user (imported via import-url)
+    # - Jobs with no user_id (ingested from Greenhouse/Lever/USAJobs/etc.)
+    # Either can be "this user's" application target
+    from sqlalchemy import or_ as _or
+    jobs = db.query(JobRow).filter(
+        _or(JobRow.user_id == user_id, JobRow.user_id.is_(None))
+    ).all()
 
     for msg_stub in messages:
         msg_id = msg_stub["id"]
@@ -278,14 +284,18 @@ async def sync_emails(db, user_id: str, days_back: int = 60) -> dict:
         company_guess = guess_company_from_subject(subject)
         role_guess = guess_role_from_subject(subject)
 
-        # Try to match a job
+        # Try to match a job — prefer jobs that the user has already interacted
+        # with (status != new) so a touched job beats a cold match
         matched_job: Optional[JobRow] = None
         if company_guess:
             cg_lower = company_guess.lower()
-            for job in jobs:
-                if cg_lower in job.company.lower() or job.company.lower() in cg_lower:
-                    matched_job = job
-                    break
+            candidates = [
+                job for job in jobs
+                if cg_lower in job.company.lower() or job.company.lower() in cg_lower
+            ]
+            # Prefer a job the user has already touched
+            touched = [j for j in candidates if j.status and j.status != "new"]
+            matched_job = touched[0] if touched else (candidates[0] if candidates else None)
 
         # Save event
         import uuid
