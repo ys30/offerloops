@@ -132,7 +132,7 @@ def list_jobs(
     tag: Optional[str] = Query(None, description="Filter by raw tag (exact name)"),
     industries: Optional[str] = Query(None, description="Comma-separated consolidated industry names"),
     sort: str = Query("date", description="Sort order: date | score"),
-    limit: int = Query(50, le=200),
+    limit: int = Query(50, le=500),
     offset: int = Query(0),
     db: Session = Depends(get_db),
 ):
@@ -2553,7 +2553,11 @@ def link_email_event(
     job_id = body.get("job_id")
     if not job_id:
         raise HTTPException(status_code=400, detail="job_id required")
-    job = db.query(JobRow).filter(JobRow.id == job_id, JobRow.user_id == user_id).first()
+    from sqlalchemy import or_ as _or2
+    job = db.query(JobRow).filter(
+        JobRow.id == job_id,
+        _or2(JobRow.user_id == user_id, JobRow.user_id.is_(None)),
+    ).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     ev.job_id = job_id

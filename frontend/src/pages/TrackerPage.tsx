@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
-import { fetchEmailEvents, fetchFollowups, fetchGmailStatus, fetchTracker, syncGmail, updateJobStatus } from "../api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { fetchEmailEvents, fetchFollowups, fetchGmailStatus, fetchJobs, fetchTracker, syncGmail, updateJobStatus } from "../api";
 import type { EmailEvent, Job, User } from "../types";
-import { fetchJobs } from "../api";
 
 type FollowupJob = Job & { followup_due_days: number; days_overdue: number };
 
@@ -36,6 +35,7 @@ export default function TrackerPage({ user, onSelectJob }: Props) {
   // jobs available for linking
   const [allJobs, setAllJobs] = useState<Job[]>([]);
   const [linkingEvent, setLinkingEvent] = useState<string | null>(null);
+  const [linkErrors, setLinkErrors] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     try {
@@ -64,7 +64,7 @@ export default function TrackerPage({ user, onSelectJob }: Props) {
 
   useEffect(() => {
     load();
-    fetchJobs({ limit: 200 }).then(r => setAllJobs(r.jobs)).catch(() => null);
+    fetchJobs({ limit: 500 }).then(r => setAllJobs(r.jobs)).catch(() => null);
     if (user) {
       fetchGmailStatus().then(async s => {
         setGmailConnected(s.connected);
@@ -115,15 +115,23 @@ export default function TrackerPage({ user, onSelectJob }: Props) {
 
   async function linkUnmatchedToJob(eventId: string, jobId: string) {
     setLinkingEvent(eventId);
+    setLinkErrors(prev => { const n = { ...prev }; delete n[eventId]; return n; });
     try {
-      await fetch(`/api/gmail/events/${eventId}/link`, {
+      const res = await fetch(`/api/gmail/events/${eventId}/link`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("ol_token")}` },
         body: JSON.stringify({ job_id: jobId }),
       });
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b.detail ?? `HTTP ${res.status}`);
+      }
       await Promise.all([load(), loadEmailEvents()]);
-    } catch { /* ignore */ }
-    finally { setLinkingEvent(null); }
+    } catch (e) {
+      setLinkErrors(prev => ({ ...prev, [eventId]: e instanceof Error ? e.message : "Link failed" }));
+    } finally {
+      setLinkingEvent(null);
+    }
   }
 
   const total = Object.values(grouped).reduce((n, jobs) => n + jobs.length, 0);
@@ -255,47 +263,44 @@ export default function TrackerPage({ user, onSelectJob }: Props) {
               <div style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", marginBottom: 10 }}>
                 📬 Email-detected applications not yet linked to a job ({unmatchedEvents.length})
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {unmatchedEvents.map(ev => (
                   <div key={ev.id} style={{
                     background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8,
-                    padding: "10px 14px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+                    padding: "12px 14px",
                   }}>
-                    <div style={{ flex: 1, minWidth: 200 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13, color: "#1e293b" }}>
-                        {ev.company_guess || "Unknown company"}
-                        {ev.role_guess && <span style={{ fontWeight: 400, color: "#64748b" }}> — {ev.role_guess}</span>}
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+                      <div style={{ flex: 1, minWidth: 200 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, color: "#1e293b" }}>
+                          {ev.company_guess || "Unknown company"}
+                          {ev.role_guess && <span style={{ fontWeight: 400, color: "#64748b" }}> — {ev.role_guess}</span>}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
+                          {ev.email_date ? new Date(ev.email_date).toLocaleDateString() : ""} · {ev.subject}
+                        </div>
                       </div>
-                      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
-                        {ev.email_date ? new Date(ev.email_date).toLocaleDateString() : ""} · {ev.subject}
-                      </div>
+                      {ev.detected_status && (
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99, whiteSpace: "nowrap",
+                          background: STATUS_COLORS[ev.detected_status] ? STATUS_COLORS[ev.detected_status] + "22" : "#f1f5f9",
+                          color: STATUS_COLORS[ev.detected_status] ?? "#64748b",
+                          border: `1px solid ${STATUS_COLORS[ev.detected_status] ?? "#e2e8f0"}40`,
+                        }}>
+                          {ev.detected_status.replace("_", " ")}
+                        </span>
+                      )}
                     </div>
-                    {ev.detected_status && (
-                      <span style={{
-                        fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99, whiteSpace: "nowrap",
-                        background: STATUS_COLORS[ev.detected_status] ? STATUS_COLORS[ev.detected_status] + "22" : "#f1f5f9",
-                        color: STATUS_COLORS[ev.detected_status] ?? "#64748b",
-                        border: `1px solid ${STATUS_COLORS[ev.detected_status] ?? "#e2e8f0"}40`,
-                      }}>
-                        {ev.detected_status.replace("_", " ")}
-                      </span>
-                    )}
-                    <select
-                      defaultValue=""
+                    <JobSearchPicker
+                      allJobs={allJobs}
+                      defaultSearch={ev.company_guess ?? ""}
                       disabled={linkingEvent === ev.id}
-                      onChange={e => { if (e.target.value) linkUnmatchedToJob(ev.id, e.target.value); }}
-                      onClick={e => e.stopPropagation()}
-                      style={{
-                        fontSize: 11, padding: "4px 8px", borderRadius: 6,
-                        border: "1px solid #cbd5e1", background: "#f8fafc", cursor: "pointer",
-                        color: "#374151", maxWidth: 200,
-                      }}
-                    >
-                      <option value="">Link to job…</option>
-                      {allJobs.map(j => (
-                        <option key={j.id} value={j.id}>{j.company} — {j.title}</option>
-                      ))}
-                    </select>
+                      onSelect={jobId => linkUnmatchedToJob(ev.id, jobId)}
+                    />
+                    {linkErrors[ev.id] && (
+                      <div style={{ fontSize: 11, color: "#dc2626", marginTop: 6 }}>
+                        ✗ {linkErrors[ev.id]}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -442,6 +447,79 @@ function TrackerCard({ job, currentCol, emailEvents, onOpen, onMove, onRemove }:
           ✕
         </button>
       </div>
+    </div>
+  );
+}
+
+function JobSearchPicker({ allJobs, defaultSearch, disabled, onSelect }: {
+  allJobs: Job[];
+  defaultSearch: string;
+  disabled: boolean;
+  onSelect: (jobId: string) => void;
+}) {
+  const [search, setSearch] = useState(defaultSearch);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  const filtered = allJobs.filter(j => {
+    const q = search.toLowerCase();
+    return j.company.toLowerCase().includes(q) || j.title.toLowerCase().includes(q);
+  }).slice(0, 30);
+
+  return (
+    <div ref={ref} style={{ position: "relative", maxWidth: 380 }}>
+      <input
+        value={search}
+        onChange={e => { setSearch(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        disabled={disabled}
+        placeholder="Search by company or job title…"
+        style={{
+          width: "100%", padding: "6px 10px", fontSize: 12, borderRadius: 6,
+          border: "1px solid #cbd5e1", boxSizing: "border-box",
+          background: disabled ? "#f8fafc" : "#fff",
+        }}
+      />
+      {open && filtered.length > 0 && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
+          background: "#fff", border: "1px solid #e2e8f0", borderRadius: 6,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 220, overflowY: "auto",
+        }}>
+          {filtered.map(j => (
+            <div
+              key={j.id}
+              onMouseDown={e => { e.preventDefault(); onSelect(j.id); setSearch(`${j.company} — ${j.title}`); setOpen(false); }}
+              style={{
+                padding: "8px 12px", cursor: "pointer", fontSize: 12,
+                borderBottom: "1px solid #f1f5f9",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = "#f0f9ff")}
+              onMouseLeave={e => (e.currentTarget.style.background = "#fff")}
+            >
+              <span style={{ fontWeight: 600, color: "#1e293b" }}>{j.company}</span>
+              <span style={{ color: "#64748b" }}> — {j.title}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {open && search.length > 0 && filtered.length === 0 && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
+          background: "#fff", border: "1px solid #e2e8f0", borderRadius: 6,
+          padding: "10px 12px", fontSize: 12, color: "#94a3b8",
+        }}>
+          No jobs found for "{search}"
+        </div>
+      )}
     </div>
   );
 }
