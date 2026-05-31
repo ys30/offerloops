@@ -318,17 +318,22 @@ def _migrate_pg(conn):
     """Add missing columns for PostgreSQL (SQLAlchemy inspect-based, dialect-agnostic)."""
     from sqlalchemy import inspect, text
     inspector = inspect(conn)
-    # profiles table — add link columns
+    # profiles table — add link columns (each column in its own try/except)
     try:
         pcols = {c["name"] for c in inspector.get_columns("profiles")}
-        for col in ["github_url", "google_scholar_url", "orcid_url", "website_url", "twitter_url"]:
-            if col not in pcols:
-                conn.execute(text(f"ALTER TABLE profiles ADD COLUMN {col} TEXT"))
-        if "education_json" not in pcols:
-            conn.execute(text("ALTER TABLE profiles ADD COLUMN education_json TEXT DEFAULT '[]'"))
-        conn.commit()
     except Exception:
-        pass
+        pcols = set()
+    for col in ["github_url", "google_scholar_url", "orcid_url", "website_url", "twitter_url", "education_json"]:
+        if col not in pcols:
+            typ = "TEXT DEFAULT '[]'" if col == "education_json" else "TEXT"
+            try:
+                conn.execute(text(f"ALTER TABLE profiles ADD COLUMN {col} {typ}"))
+                conn.commit()
+            except Exception:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
 
     # projects table — add optional columns
     try:
