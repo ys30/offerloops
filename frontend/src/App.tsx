@@ -85,6 +85,7 @@ export default function App() {
 
   // Search / filter state
   const [q, setQ] = useState("");
+  const [location, setLocation] = useState("");
   const [remote, setRemote] = useState<boolean | undefined>();
   const [source, setSource] = useState("");
   const [selectedIndustries, setSelectedIndustries] = useState<Set<string>>(new Set());
@@ -98,6 +99,7 @@ export default function App() {
     try {
       const { jobs: data, total: t } = await fetchJobs({
         q: q || undefined,
+        location: location || undefined,
         remote,
         source: source || undefined,
         industries: selectedIndustries.size > 0 ? Array.from(selectedIndustries).join(",") : undefined,
@@ -111,7 +113,7 @@ export default function App() {
     finally {
       setLoading(false);
     }
-  }, [q, remote, source, selectedIndustries, sort, page]);
+  }, [q, location, remote, source, selectedIndustries, sort, page]);
 
   const loadStats = useCallback(async () => {
     try {
@@ -246,6 +248,13 @@ export default function App() {
             placeholder="Search jobs, companies, keywords…"
             value={q}
             onChange={e => setQ(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") { setPage(1); loadJobs(1); } }}
+          />
+          <input
+            style={{ ...searchInput, minWidth: 140 }}
+            placeholder="State or city (e.g. NM, DC)"
+            value={location}
+            onChange={e => { setLocation(e.target.value); setPage(1); }}
             onKeyDown={e => { if (e.key === "Enter") { setPage(1); loadJobs(1); } }}
           />
           <select
