@@ -1575,13 +1575,13 @@ async def analyze_job(payload: AnalyzeRequest, user_id: str = Depends(_require_u
     return result
 
 
-@app.post("/api/ai/application-pack", response_model=ApplicationPackResult, tags=["ai"])
+@app.post("/api/ai/application-pack", tags=["ai"])
 async def generate_application_pack(
     payload: ApplicationPackRequest,
     user_id: str = Depends(_require_user),
     db: Session = Depends(get_db),
 ):
-    """One-click: generate tailored resume + cover letter for a job."""
+    """One-click: generate tailored resume + cover letter. Streams SSE to avoid Cloudflare 524."""
     from .ai import tailor_resume, generate_cover_letter, _pick_provider
 
     row = db.get(JobRow, payload.job_id)
@@ -1606,43 +1606,82 @@ async def generate_application_pack(
         links_ctx = await build_links_context(pack_profile)
         if links_ctx:
             resume_text = resume_text + "\n\n--- Additional context from profile links ---\n" + links_ctx
+        # Inject structured education entries so they are never lost to truncation
+        edu_raw = getattr(pack_profile, "education_json", None) or "[]"
+        try:
+            edu_entries = json.loads(edu_raw)
+        except Exception:
+            edu_entries = []
+        if edu_entries:
+            edu_lines = "\n".join(
+                f"- {e.get('degree', '')} — {e.get('school', '')}, {e.get('year', '')}".rstrip(", ")
+                + (f" | {e['notes']}" if e.get("notes") else "")
+                for e in edu_entries
+            )
+            resume_text = resume_text + f"\n\nEDUCATION (authoritative — include ALL entries below verbatim):\n{edu_lines}"
     projects_ctx = _build_projects_context(db, user_id)
     if projects_ctx:
         resume_text = resume_text + "\n\n" + projects_ctx
 
-    try:
-        provider_used, _ = _pick_provider(payload.provider, payload.api_key)
-        tailored, cover = await asyncio.gather(
-            tailor_resume(
-                job_title=row.title,
-                job_description=row.description or "",
-                resume_text=resume_text,
-                provider=payload.provider,
-                model=payload.model,
-                api_key=payload.api_key,
-            ),
-            generate_cover_letter(
-                job_title=row.title,
-                company=row.company,
-                job_description=row.description or "",
-                resume_text=resume_text,
-                provider=payload.provider,
-                model=payload.model,
-                api_key=payload.api_key,
-            ),
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Generation failed: {e}")
+    provider_used, _ = _pick_provider(payload.provider, payload.api_key)
+    job_title = row.title
+    company = row.company
+    job_description = row.description or ""
 
-    return ApplicationPackResult(
-        job_id=payload.job_id,
-        job_title=row.title,
-        company=row.company,
-        tailored_resume=tailored,
-        cover_letter=cover,
-        provider_used=provider_used,
+    async def generate():
+        yield f"data: {json.dumps({'type': 'started', 'message': 'Generating resume and cover letter…'})}\n\n"
+
+        result: dict = {}
+        error_msg: str = ""
+        done = asyncio.Event()
+
+        async def do_work():
+            nonlocal error_msg
+            try:
+                tailored, cover = await asyncio.gather(
+                    tailor_resume(
+                        job_title=job_title,
+                        job_description=job_description,
+                        resume_text=resume_text,
+                        provider=payload.provider,
+                        model=payload.model,
+                        api_key=payload.api_key,
+                    ),
+                    generate_cover_letter(
+                        job_title=job_title,
+                        company=company,
+                        job_description=job_description,
+                        resume_text=resume_text,
+                        provider=payload.provider,
+                        model=payload.model,
+                        api_key=payload.api_key,
+                    ),
+                )
+                result["tailored_resume"] = tailored
+                result["cover_letter"] = cover
+            except Exception as e:
+                error_msg = str(e)
+            finally:
+                done.set()
+
+        asyncio.create_task(do_work())
+
+        # Send heartbeat every 20 s so Cloudflare doesn't 524
+        while not done.is_set():
+            try:
+                await asyncio.wait_for(asyncio.shield(done.wait()), timeout=20)
+            except asyncio.TimeoutError:
+                yield ": heartbeat\n\n"
+
+        if error_msg:
+            yield f"data: {json.dumps({'type': 'error', 'detail': error_msg})}\n\n"
+        else:
+            yield f"data: {json.dumps({'type': 'done', 'job_id': payload.job_id, 'job_title': job_title, 'company': company, 'provider_used': provider_used, **result})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
     )
 
 
@@ -1683,7 +1722,17 @@ async def score_all_jobs(
         state_list = [s.strip().upper() for s in states.split(",") if s.strip()]
         q = q.filter(JobRow.location_state.in_(state_list))
     elif us_only:
-        q = q.filter(or_(JobRow.location_country == "US", JobRow.location_country.is_(None)))
+        NON_US = ["United Kingdom", "Canada", "Australia", "Germany", "France",
+                  "India", "Netherlands", "Singapore", "Ireland", "Spain",
+                  "Switzerland", "Sweden", "Denmark", "Norway", "Poland",
+                  "Brazil", "Mexico", "Japan", "South Korea", "China"]
+        us_conditions = or_(
+            JobRow.location_country.ilike("US%"),
+            JobRow.location_country.is_(None),
+            JobRow.location_country == "",
+        )
+        non_us_exclusions = [~JobRow.location_country.ilike(f"{c}%") for c in NON_US]
+        q = q.filter(us_conditions, *non_us_exclusions)
     if remote is not None:
         q = q.filter(JobRow.location_remote == remote)
     if tag:
@@ -1740,14 +1789,21 @@ async def score_all_jobs(
                     return ("error", job_id, job_title, str(e))
 
         tasks = [asyncio.create_task(score_one(jid, jtitle, jdesc)) for jid, jtitle, jdesc in job_data]
-        for fut in asyncio.as_completed(tasks):
-            status, job_id, job_title, payload = await fut
-            if status == "ok":
-                scored += 1
-                yield f"data: {json.dumps({'type': 'progress', 'job_id': job_id, 'title': job_title, 'score': payload, 'scored': scored, 'failed': failed, 'total': total})}\n\n"
-            else:
-                failed += 1
-                yield f"data: {json.dumps({'type': 'error', 'job_id': job_id, 'title': job_title, 'error': payload, 'scored': scored, 'failed': failed, 'total': total})}\n\n"
+        pending = set(tasks)
+        while pending:
+            # Wait up to 20 s for any task; send heartbeat if none finish in time
+            done_set, pending = await asyncio.wait(pending, timeout=20)
+            if not done_set:
+                yield ": heartbeat\n\n"
+                continue
+            for fut in done_set:
+                status, job_id, job_title, payload = fut.result()
+                if status == "ok":
+                    scored += 1
+                    yield f"data: {json.dumps({'type': 'progress', 'job_id': job_id, 'title': job_title, 'score': payload, 'scored': scored, 'failed': failed, 'total': total})}\n\n"
+                else:
+                    failed += 1
+                    yield f"data: {json.dumps({'type': 'error', 'job_id': job_id, 'title': job_title, 'error': payload, 'scored': scored, 'failed': failed, 'total': total})}\n\n"
 
         yield f"data: {json.dumps({'type': 'done', 'scored': scored, 'failed': failed, 'total': total})}\n\n"
 
@@ -1816,7 +1872,9 @@ def _profile_out(row) -> ProfileOut:
         orcid_url=getattr(row, "orcid_url", None),
         website_url=getattr(row, "website_url", None),
         twitter_url=getattr(row, "twitter_url", None),
-        resume_text=row.resume_text, updated_at=row.updated_at,
+        resume_text=row.resume_text,
+        education_json=getattr(row, "education_json", None),
+        updated_at=row.updated_at,
     )
 
 

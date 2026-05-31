@@ -163,6 +163,7 @@ class ProfileIn(BaseModel):
     website_url: Optional[str] = None
     twitter_url: Optional[str] = None
     resume_text: Optional[str] = None
+    education_json: Optional[str] = None  # JSON-encoded list of {degree, school, year, notes}
 
 
 class ProfileOut(BaseModel):
@@ -178,4 +179,5 @@ class ProfileOut(BaseModel):
     website_url: Optional[str] = None
     twitter_url: Optional[str] = None
     resume_text: Optional[str] = None
+    education_json: Optional[str] = None
     updated_at: Optional[datetime] = None

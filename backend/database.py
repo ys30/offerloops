@@ -137,6 +137,7 @@ class ProfileRow(Base):
     website_url = Column(String)
     twitter_url = Column(String)
     resume_text = Column(Text)          # raw text (source of truth for AI)
+    education_json = Column(Text, default="[]")  # JSON list of {degree, school, year, notes}
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -262,6 +263,8 @@ def _migrate(conn):
     for col in ["github_url", "google_scholar_url", "orcid_url", "website_url", "twitter_url"]:
         if col not in pcols2:
             cur.execute(f"ALTER TABLE profiles ADD COLUMN {col} TEXT")
+    if "education_json" not in pcols2:
+        cur.execute("ALTER TABLE profiles ADD COLUMN education_json TEXT DEFAULT '[]'")
 
     # ── projects table ───────────────────────────────────────────────────────
     try:
@@ -321,6 +324,8 @@ def _migrate_pg(conn):
         for col in ["github_url", "google_scholar_url", "orcid_url", "website_url", "twitter_url"]:
             if col not in pcols:
                 conn.execute(text(f"ALTER TABLE profiles ADD COLUMN {col} TEXT"))
+        if "education_json" not in pcols:
+            conn.execute(text("ALTER TABLE profiles ADD COLUMN education_json TEXT DEFAULT '[]'"))
         conn.commit()
     except Exception:
         pass

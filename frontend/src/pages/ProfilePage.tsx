@@ -3,6 +3,13 @@ import { disconnectGmail, fetchGmailStatus, getToken, startGmailAuth, syncGmail,
 import StoryBankPage from "./StoryBankPage";
 import type { GmailStatus } from "../types";
 
+interface EducationEntry {
+  degree: string;
+  school: string;
+  year: string;
+  notes: string;
+}
+
 interface Profile {
   name?: string;
   email?: string;
@@ -15,6 +22,7 @@ interface Profile {
   website_url?: string;
   twitter_url?: string;
   resume_text?: string;
+  education_json?: string;
   updated_at?: string;
 }
 
@@ -90,6 +98,7 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
   const projectFileRef = useRef<HTMLInputElement>(null);
   const projectNameRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<"profile" | "stories">("profile");
+  const [education, setEducation] = useState<EducationEntry[]>([]);
 
   useEffect(() => {
     fetchGmailStatus().then(setGmailStatus).catch(() => null);
@@ -122,6 +131,7 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
       setOrcidUrl(p?.orcid_url || "");
       setWebsiteUrl(p?.website_url || "");
       setTwitterUrl(p?.twitter_url || "");
+      try { setEducation(JSON.parse(p?.education_json || "[]")); } catch { setEducation([]); }
     });
     fetchProjects().then(setProjects).catch(() => null);
   }, []);
@@ -142,6 +152,7 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
         orcid_url: orcidUrl || undefined,
         website_url: websiteUrl || undefined,
         twitter_url: twitterUrl || undefined,
+        education_json: JSON.stringify(education),
       });
       setProfile(p);
       flash("Profile saved.");
@@ -788,6 +799,56 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
               })}
             </div>
           </>
+        )}
+      </section>
+
+      {/* Education entries — authoritative list for AI */}
+      <section style={{ ...card, marginTop: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <h2 style={{ ...sectionTitle, margin: 0 }}>Education</h2>
+          <button
+            onClick={() => setEducation(prev => [...prev, { degree: "", school: "", year: "", notes: "" }])}
+            style={{ padding: "4px 12px", background: "#2563eb", color: "#fff", border: "none", borderRadius: 5, cursor: "pointer", fontSize: 12 }}
+          >+ Add degree</button>
+        </div>
+        <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 12px" }}>
+          These entries are injected directly into every resume generation — always included, never guessed.
+        </p>
+        {education.length === 0 && (
+          <p style={{ fontSize: 13, color: "#94a3b8", fontStyle: "italic" }}>No education entries yet. Click "+ Add degree" to add your degrees.</p>
+        )}
+        {education.map((entry, i) => (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 80px auto", gap: 6, marginBottom: 8, alignItems: "start" }}>
+            <input
+              placeholder="Degree (e.g. Ph.D. in Ecology)"
+              value={entry.degree}
+              onChange={e => setEducation(prev => prev.map((x, j) => j === i ? { ...x, degree: e.target.value } : x))}
+              style={{ ...inp, fontSize: 12 }}
+            />
+            <input
+              placeholder="School (exact name)"
+              value={entry.school}
+              onChange={e => setEducation(prev => prev.map((x, j) => j === i ? { ...x, school: e.target.value } : x))}
+              style={{ ...inp, fontSize: 12 }}
+            />
+            <input
+              placeholder="Year"
+              value={entry.year}
+              onChange={e => setEducation(prev => prev.map((x, j) => j === i ? { ...x, year: e.target.value } : x))}
+              style={{ ...inp, fontSize: 12 }}
+            />
+            <button
+              onClick={() => setEducation(prev => prev.filter((_, j) => j !== i))}
+              style={{ padding: "6px 10px", background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 5, cursor: "pointer", fontSize: 12 }}
+            >✕</button>
+          </div>
+        ))}
+        {education.length > 0 && (
+          <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end" }}>
+            <button onClick={handleSave} disabled={saving} style={primaryBtn}>
+              {saving ? "Saving…" : "Save Education"}
+            </button>
+          </div>
         )}
       </section>
 

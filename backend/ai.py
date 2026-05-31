@@ -205,14 +205,18 @@ async def analyze_job_fit(
 TAILOR_RESUME_SYSTEM = """You are a world-class resume writer specializing in ATS optimization and executive-level tailoring. Given a base resume and a job description, produce a deeply tailored resume JSON.
 
 RULES — follow every one:
-1. FACTS: Never invent companies, dates, degrees, or credentials. Keep all factual details exactly as given.
-2. EDUCATION: Include EVERY degree from the base resume — do not omit bachelor's, master's, or any other credential. List them all in reverse chronological order.
+1. FACTS: Never invent companies, dates, degrees, or credentials. Keep all factual details exactly as given. Copy school names character-for-character from the base resume — never paraphrase or substitute university names.
+2. EDUCATION: Copy the COMPLETE education section from the "EDUCATION SECTION" block provided. Include EVERY line/entry listed there in reverse chronological order. Degree abbreviations vary widely — treat every line in the section as a degree entry regardless of how it is abbreviated. Common non-standard forms: MAP or MPA = Master of Public Affairs, BE or B.E. = Bachelor of Engineering, BS = Bachelor of Science, ME = Master of Engineering, MPH = Master of Public Health, MEM = Master of Environmental Management, MFA = Master of Fine Arts, JD = Juris Doctor, etc. Expand abbreviations in the output (e.g. "MAP" → "Master of Public Affairs (MAP)"). Copy exact school names and years. Never output "Not specified", "University Name", or any placeholder. Never add degrees not present in the input.
 3. BULLETS: Write 4–6 achievement bullets per role. Every bullet must:
    - Start with a strong past-tense action verb (Engineered, Spearheaded, Automated, Reduced, Designed, Led, Deployed, Modeled, etc.)
    - Include a quantified result wherever possible (%, $, x faster, N users, N datasets, saved X hours/week)
    - Mirror keywords and phrases from the job description where truthful
    - Describe IMPACT, not just tasks ("Reduced model runtime by 40%" not "Used Python for modeling")
-4. SUMMARY: Write a 3–4 sentence targeted summary that opens with the candidate's strongest relevant credential, names the exact role/domain from the job title (use the JD's language, not a generic label like "data analyst"), and calls out 2–3 differentiating strengths matching the JD.
+4. SUMMARY: Write a 3–4 sentence targeted summary. Rules:
+   - Name the exact role title from the job description (never substitute a generic label like "data analyst" or "scientist")
+   - Mention the candidate's highest degree AT MOST ONCE — do not repeat it across sentences
+   - Do NOT open with "PhD-holding" or lead every sentence with the degree
+   - Focus on skills, domain expertise, and measurable impact relevant to the JD, not credentials alone
 5. SKILLS: Extract and prioritize skills that appear in the job description. Group as: Programming, Data & Analytics, Domain Expertise, Tools & Platforms.
 6. PROJECTS: If the resume or additional context mentions relevant projects (GitHub, publications, tools built), include a "projects" array.
 7. KEYWORDS: Add an "ats_keywords" array of 10–15 exact terms from the JD that are present in the resume (for ATS scanning).
@@ -240,14 +244,20 @@ RULES — follow every one:
   "education": [
     {
       "degree": "Ph.D. in Environmental Science",
-      "school": "University Name",
+      "school": "Exact University Name From Resume",
       "year": "2019",
       "notes": "Dissertation: title; relevant coursework or honors"
     },
     {
+      "degree": "M.S. in Ecology",
+      "school": "Exact University Name From Resume",
+      "year": "2015",
+      "notes": ""
+    },
+    {
       "degree": "B.S. in Biology",
-      "school": "University Name",
-      "year": "2014",
+      "school": "Exact University Name From Resume",
+      "year": "2013",
       "notes": ""
     }
   ],
@@ -290,6 +300,43 @@ RULES:
 - Output plain text only, no markdown, no headers"""
 
 
+def _extract_education_block(resume_text: str) -> str:
+    """Return the raw education section text from a plain-text resume."""
+    lines = resume_text.splitlines()
+    in_edu = False
+    collected: list[str] = []
+    section_header = re.compile(
+        r"^(education|academic background|academic|degrees?|qualifications?)\s*:?\s*$",
+        re.IGNORECASE,
+    )
+    next_section = re.compile(
+        r"^(experience|work history|work|employment|skills?|publications?|projects?|"
+        r"certif|awards?|honors?|volunteer|languages?|summary|profile|objective)\s*:?\s*$",
+        re.IGNORECASE,
+    )
+    degree_line = re.compile(
+        r"\b(ph\.?d\.?|m\.?s\.?|m\.?a\.?|m\.?eng\.?|m\.?sc\.?|master|bachelor|"
+        r"b\.?s\.?|b\.?a\.?|b\.?e\.?|doctor|associate|mba|mpp|mpa|map|mph|mem|"
+        r"m\.?ed\.?|m\.?f\.?a\.?|j\.?d\.?|phd|llm|dba|edd)\b",
+        re.IGNORECASE,
+    )
+    for line in lines:
+        stripped = line.strip()
+        if section_header.match(stripped):
+            in_edu = True
+            collected.append(stripped)
+            continue
+        if in_edu and next_section.match(stripped):
+            break
+        if in_edu:
+            collected.append(stripped)
+        elif degree_line.search(stripped):
+            # No explicit section header — start collecting from first degree line
+            in_edu = True
+            collected.append(stripped)
+    return "\n".join(collected)
+
+
 async def tailor_resume(
     job_title: str,
     job_description: str,
@@ -301,8 +348,23 @@ async def tailor_resume(
     """Return structured resume as a dict."""
     resolved_provider, resolved_key = _pick_provider(provider, api_key)
     resolved_model = model or PROVIDERS[resolved_provider]["default_model"]
-    user_msg = f"Job Title: {job_title}\n\nJob Description:\n{job_description[:6000]}\n\nBase Resume:\n{resume_text[:5000]}\n\nOutput the tailored resume JSON:"
-    raw = await _call_provider(resolved_provider, resolved_model, TAILOR_RESUME_SYSTEM, user_msg, resolved_key, max_tokens=3000)
+
+    # Extract education block so it is never lost to truncation
+    edu_block = _extract_education_block(resume_text)
+    edu_note = (
+        f"\n\nEDUCATION SECTION (verbatim from resume — copy ALL entries into output, "
+        f"do NOT add placeholders like 'Not specified', do NOT invent school names):\n{edu_block}"
+        if edu_block else ""
+    )
+
+    user_msg = (
+        f"Job Title: {job_title}\n\n"
+        f"Job Description:\n{job_description[:6000]}\n\n"
+        f"Base Resume:\n{resume_text[:8000]}"
+        f"{edu_note}\n\n"
+        f"Output the tailored resume JSON:"
+    )
+    raw = await _call_provider(resolved_provider, resolved_model, TAILOR_RESUME_SYSTEM, user_msg, resolved_key, max_tokens=3500)
     return json.loads(_strip_json(raw))
 
 

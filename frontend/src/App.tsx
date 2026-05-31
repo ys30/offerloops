@@ -258,6 +258,8 @@ export default function App() {
             value={location}
             onChange={e => { setLocation(e.target.value); setPage(1); }}
             onKeyDown={e => { if (e.key === "Enter") { setPage(1); loadJobs(1); } }}
+            autoComplete="off"
+            name="job-location-filter"
           />
           <select
             style={selectStyle}
