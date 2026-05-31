@@ -86,6 +86,7 @@ export default function App() {
   // Search / filter state
   const [q, setQ] = useState("");
   const [location, setLocation] = useState("");
+  const [usOnly, setUsOnly] = useState(false);
   const [remote, setRemote] = useState<boolean | undefined>();
   const [source, setSource] = useState("");
   const [selectedIndustries, setSelectedIndustries] = useState<Set<string>>(new Set());
@@ -100,6 +101,7 @@ export default function App() {
       const { jobs: data, total: t } = await fetchJobs({
         q: q || undefined,
         location: location || undefined,
+        us_only: usOnly || undefined,
         remote,
         source: source || undefined,
         industries: selectedIndustries.size > 0 ? Array.from(selectedIndustries).join(",") : undefined,
@@ -113,7 +115,7 @@ export default function App() {
     finally {
       setLoading(false);
     }
-  }, [q, location, remote, source, selectedIndustries, sort, page]);
+  }, [q, location, usOnly, remote, source, selectedIndustries, sort, page]);
 
   const loadStats = useCallback(async () => {
     try {
@@ -294,7 +296,13 @@ export default function App() {
             <option value="date">Newest first</option>
             <option value="score">Best match first</option>
           </select>
-          <button onClick={() => { setPage(1); loadJobs(1); }} style={primaryBtn}>Search</button>
+          <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "#374151", whiteSpace: "nowrap", cursor: "pointer" }}>
+            <input type="checkbox" checked={usOnly} onChange={e => { setUsOnly(e.target.checked); setPage(1); }} />
+            US only
+          </label>
+          <button onClick={() => { setPage(1); loadJobs(1); }} style={primaryBtn}>
+            Search{total > 0 && !loading ? ` (${total.toLocaleString()})` : ""}
+          </button>
           <button onClick={() => setShowAdd(true)} style={secondaryBtn}>+ Add Job</button>
           <button onClick={() => setShowIngest(v => !v)} style={secondaryBtn}>
             {showIngest ? "Hide Import" : "Import from Source"}

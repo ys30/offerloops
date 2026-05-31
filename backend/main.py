@@ -125,6 +125,7 @@ def list_jobs(
     q: Optional[str] = Query(None, description="Full-text keyword search"),
     company: Optional[str] = Query(None),
     location: Optional[str] = Query(None),
+    us_only: Optional[bool] = Query(None, description="Filter to US jobs only"),
     remote: Optional[bool] = Query(None),
     source: Optional[str] = Query(None),
     job_type: Optional[str] = Query(None),
@@ -148,23 +149,45 @@ def list_jobs(
         )
     if company:
         query = query.filter(JobRow.company.ilike(f"%{company}%"))
+    STATE_MAP = {
+        "AL":"Alabama","AK":"Alaska","AZ":"Arizona","AR":"Arkansas","CA":"California",
+        "CO":"Colorado","CT":"Connecticut","DE":"Delaware","FL":"Florida","GA":"Georgia",
+        "HI":"Hawaii","ID":"Idaho","IL":"Illinois","IN":"Indiana","IA":"Iowa","KS":"Kansas",
+        "KY":"Kentucky","LA":"Louisiana","ME":"Maine","MD":"Maryland","MA":"Massachusetts",
+        "MI":"Michigan","MN":"Minnesota","MS":"Mississippi","MO":"Missouri","MT":"Montana",
+        "NE":"Nebraska","NV":"Nevada","NH":"New Hampshire","NJ":"New Jersey","NM":"New Mexico",
+        "NY":"New York","NC":"North Carolina","ND":"North Dakota","OH":"Ohio","OK":"Oklahoma",
+        "OR":"Oregon","PA":"Pennsylvania","RI":"Rhode Island","SC":"South Carolina",
+        "SD":"South Dakota","TN":"Tennessee","TX":"Texas","UT":"Utah","VT":"Vermont",
+        "VA":"Virginia","WA":"Washington","WV":"West Virginia","WI":"Wisconsin","WY":"Wyoming",
+        "DC":"Washington DC","PR":"Puerto Rico","GU":"Guam",
+    }
+    FULL_TO_ABBR = {v.lower(): k for k, v in STATE_MAP.items()}
+    US_ABBRS = set(STATE_MAP.keys())
+
+    if us_only:
+        query = query.filter(
+            or_(
+                JobRow.location_country.ilike("US%"),   # "US", "USA", "United States"
+                JobRow.location_country.is_(None),       # default country (most ingested jobs)
+                JobRow.location_country == "",
+                # Exclude explicitly non-US by including only US-state rows
+                JobRow.location_state.in_(list(US_ABBRS)),
+            )
+        ).filter(
+            ~JobRow.location_country.ilike("United Kingdom%"),
+        ).filter(
+            ~JobRow.location_country.ilike("Canada%"),
+        ).filter(
+            ~JobRow.location_country.ilike("Australia%"),
+        ).filter(
+            ~JobRow.location_country.ilike("Germany%"),
+        ).filter(
+            ~JobRow.location_country.ilike("France%"),
+        )
+
     if location:
         loc = location.strip()
-        # Build a set of terms: the input itself + any state abbreviation ↔ full-name expansions
-        STATE_MAP = {
-            "AL":"Alabama","AK":"Alaska","AZ":"Arizona","AR":"Arkansas","CA":"California",
-            "CO":"Colorado","CT":"Connecticut","DE":"Delaware","FL":"Florida","GA":"Georgia",
-            "HI":"Hawaii","ID":"Idaho","IL":"Illinois","IN":"Indiana","IA":"Iowa","KS":"Kansas",
-            "KY":"Kentucky","LA":"Louisiana","ME":"Maine","MD":"Maryland","MA":"Massachusetts",
-            "MI":"Michigan","MN":"Minnesota","MS":"Mississippi","MO":"Missouri","MT":"Montana",
-            "NE":"Nebraska","NV":"Nevada","NH":"New Hampshire","NJ":"New Jersey","NM":"New Mexico",
-            "NY":"New York","NC":"North Carolina","ND":"North Dakota","OH":"Ohio","OK":"Oklahoma",
-            "OR":"Oregon","PA":"Pennsylvania","RI":"Rhode Island","SC":"South Carolina",
-            "SD":"South Dakota","TN":"Tennessee","TX":"Texas","UT":"Utah","VT":"Vermont",
-            "VA":"Virginia","WA":"Washington","WV":"West Virginia","WI":"Wisconsin","WY":"Wyoming",
-            "DC":"Washington DC","PR":"Puerto Rico","GU":"Guam",
-        }
-        FULL_TO_ABBR = {v.lower(): k for k, v in STATE_MAP.items()}
         loc_upper = loc.upper()
         loc_lower = loc.lower()
         terms = {loc}
@@ -172,14 +195,19 @@ def list_jobs(
             terms.add(STATE_MAP[loc_upper])   # "NM" → also search "New Mexico"
         if loc_lower in FULL_TO_ABBR:
             terms.add(FULL_TO_ABBR[loc_lower])  # "new mexico" → also search "NM"
-        # "Remote" modifier — keep remote flag implicit; just filter on text
         loc_conditions = []
         for t in terms:
-            loc_conditions.extend([
-                JobRow.location_city.ilike(f"%{t}%"),
-                JobRow.location_state.ilike(f"%{t}%"),
-                JobRow.location_raw.ilike(f"%{t}%"),
-            ])
+            if t.upper() in US_ABBRS:
+                # Exact match on state field; also match raw containing the abbreviation
+                loc_conditions.append(JobRow.location_state == t.upper())
+                loc_conditions.append(JobRow.location_raw.ilike(f"%, {t.upper()}%"))
+                loc_conditions.append(JobRow.location_raw.ilike(f"%, {t.upper()} %"))
+            else:
+                loc_conditions.extend([
+                    JobRow.location_city.ilike(f"%{t}%"),
+                    JobRow.location_state.ilike(f"%{t}%"),
+                    JobRow.location_raw.ilike(f"%{t}%"),
+                ])
         query = query.filter(or_(*loc_conditions))
     if remote is not None:
         query = query.filter(JobRow.location_remote == remote)
