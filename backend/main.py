@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 from pathlib import Path
 
@@ -117,6 +117,69 @@ def _require_user(user_id: Optional[str] = Depends(_current_user_id)) -> str:
     return user_id
 
 
+# ── US-only location filter ──────────────────────────────────────────
+
+_US_STATE_ABBRS = {
+    "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
+    "KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+    "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT",
+    "VA","WA","WV","WI","WY","DC",
+}
+
+# Country/region names that definitively mean non-US
+_NON_US_TERMS = [
+    "China", "United Kingdom", "Canada", "Australia", "Germany", "France",
+    "India", "Netherlands", "Singapore", "Ireland", "Spain", "Switzerland",
+    "Sweden", "Denmark", "Norway", "Poland", "Brazil", "Mexico", "Japan",
+    "South Korea", "Korea", "Taiwan", "Hong Kong", "Philippines", "Malaysia",
+    "Indonesia", "New Zealand", "Argentina", "Chile", "Ukraine", "Russia",
+    "Italy", "Portugal", "Belgium", "Austria", "Finland", "Czech", "Romania",
+    "Hungary", "Thailand", "Vietnam", "Pakistan", "Bangladesh", "Nigeria",
+    "South Africa", "Egypt", "Kenya", "Europe", "Asia", "Africa",
+]
+
+
+def _us_only_filter():
+    """
+    Return a SQLAlchemy filter clause that keeps only US jobs.
+
+    Strategy:
+      INCLUDE if: country matches 'US*' / 'United States*'
+                  OR location_state is a 2-letter US state code
+                  OR location_raw contains 'United States' / ', USA'
+      EXCLUDE if: location_state  contains a non-US country name
+                  OR location_country contains a non-US country name
+                  OR location_raw    contains a non-US country name
+    """
+    # Positive: clearly US
+    country_us = or_(
+        JobRow.location_country.ilike("US%"),
+        JobRow.location_country.ilike("United States%"),
+    )
+    state_us = JobRow.location_state.in_(list(_US_STATE_ABBRS))
+    raw_us = or_(
+        JobRow.location_raw.ilike("%United States%"),
+        JobRow.location_raw.ilike("%, USA%"),
+        JobRow.location_raw.ilike("% USA%"),
+        JobRow.location_raw.ilike("%, US%"),
+    )
+
+    # Negative: clearly non-US (checked across all three fields)
+    def _non_us_in(col):
+        return or_(*[col.ilike(f"%{t}%") for t in _NON_US_TERMS])
+
+    non_us = or_(
+        _non_us_in(JobRow.location_state),
+        _non_us_in(JobRow.location_country),
+        _non_us_in(JobRow.location_raw),
+    )
+
+    return and_(
+        or_(country_us, state_us, raw_us),
+        ~non_us,
+    )
+
+
 # ── Jobs CRUD ────────────────────────────────────────────────────────
 
 
@@ -166,25 +229,7 @@ def list_jobs(
     US_ABBRS = set(STATE_MAP.keys())
 
     if us_only:
-        query = query.filter(
-            or_(
-                JobRow.location_country.ilike("US%"),   # "US", "USA", "United States"
-                JobRow.location_country.is_(None),       # default country (most ingested jobs)
-                JobRow.location_country == "",
-                # Exclude explicitly non-US by including only US-state rows
-                JobRow.location_state.in_(list(US_ABBRS)),
-            )
-        ).filter(
-            ~JobRow.location_country.ilike("United Kingdom%"),
-        ).filter(
-            ~JobRow.location_country.ilike("Canada%"),
-        ).filter(
-            ~JobRow.location_country.ilike("Australia%"),
-        ).filter(
-            ~JobRow.location_country.ilike("Germany%"),
-        ).filter(
-            ~JobRow.location_country.ilike("France%"),
-        )
+        query = query.filter(_us_only_filter())
 
     if location:
         loc = location.strip()
@@ -1722,17 +1767,7 @@ async def score_all_jobs(
         state_list = [s.strip().upper() for s in states.split(",") if s.strip()]
         q = q.filter(JobRow.location_state.in_(state_list))
     elif us_only:
-        NON_US = ["United Kingdom", "Canada", "Australia", "Germany", "France",
-                  "India", "Netherlands", "Singapore", "Ireland", "Spain",
-                  "Switzerland", "Sweden", "Denmark", "Norway", "Poland",
-                  "Brazil", "Mexico", "Japan", "South Korea", "China"]
-        us_conditions = or_(
-            JobRow.location_country.ilike("US%"),
-            JobRow.location_country.is_(None),
-            JobRow.location_country == "",
-        )
-        non_us_exclusions = [~JobRow.location_country.ilike(f"{c}%") for c in NON_US]
-        q = q.filter(us_conditions, *non_us_exclusions)
+        q = q.filter(_us_only_filter())
     if remote is not None:
         q = q.filter(JobRow.location_remote == remote)
     if tag:
