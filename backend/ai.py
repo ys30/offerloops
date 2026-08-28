@@ -92,9 +92,15 @@ Only include fields clearly implied by the query. Use empty strings for absent f
 
 def _strip_json(raw: str) -> str:
     raw = raw.strip()
+    # Strip markdown code fences
     if raw.startswith("```"):
         raw = re.sub(r"^```[a-z]*\n?", "", raw)
         raw = re.sub(r"```$", "", raw).strip()
+    # If model added prose before/after the JSON, extract the object
+    if not raw.startswith("{"):
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        if m:
+            raw = m.group(0)
     return raw
 
 
@@ -193,8 +199,14 @@ async def analyze_job_fit(
 
     user_msg = f"Job Title: {job_title}\n\nJob Description:\n{job_description[:4000]}\n\nResume:\n{resume_text[:3000]}"
 
-    raw = await _call_provider(provider, resolved_model, ANALYZE_SYSTEM, user_msg, resolved_key)
-    data = json.loads(_strip_json(raw))
+    for attempt in range(2):
+        raw = await _call_provider(provider, resolved_model, ANALYZE_SYSTEM, user_msg, resolved_key, max_tokens=2048)
+        try:
+            data = json.loads(_strip_json(raw))
+            break
+        except (json.JSONDecodeError, ValueError):
+            if attempt == 1:
+                raise
 
     return AnalyzeResult(
         job_id=job_id,
