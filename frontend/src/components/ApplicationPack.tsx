@@ -5,8 +5,10 @@ interface ResumeData {
   location?: string;
   linkedin?: string;
   github?: string;
+  headline?: string;
+  core_expertise?: string;
   summary?: string;
-  experience?: { title: string; company: string; dates: string; bullets: string[] }[];
+  experience?: { title: string; company: string; dates: string; location?: string; bullets: string[] }[];
   education?: { degree: string; school: string; year: string; notes?: string }[];
   skills?: string[] | Record<string, string[]>;
   projects?: { name: string; description: string }[];
@@ -29,85 +31,78 @@ interface Props {
 type Tab = "resume" | "cover";
 
 function buildResumeHTML(data: ResumeData, jobTitle: string, company: string): string {
-  const name = data.name || "Your Name";
-  const contact = [data.email, data.phone, data.location, data.linkedin].filter(Boolean).join("  ·  ");
+  const name = (data.headline || data.name || "Your Name").toUpperCase();
+  const contact = [data.location, data.phone, data.email, data.github].filter(Boolean).join(" | ");
+
+  const sec = (title: string, content: string) =>
+    `<div class="section"><div class="sec-head">${title}</div>${content}</div>`;
 
   const expHTML = (data.experience || []).map(e => `
-    <div class="exp-item">
-      <div class="exp-header">
-        <span class="exp-title">${e.title}</span>
-        <span class="exp-dates">${e.dates}</span>
+    <div class="exp-block">
+      <div class="exp-row">
+        <strong>${e.company} - ${e.title}</strong>
+        <span class="meta">${e.dates}${e.location ? " | " + e.location : ""}</span>
       </div>
-      <div class="exp-company">${e.company}</div>
       <ul>${(e.bullets || []).map(b => `<li>${b}</li>`).join("")}</ul>
     </div>`).join("");
 
-  const eduHTML = (data.education || []).map(e => `
-    <div class="edu-item">
-      <span class="exp-title">${e.degree}</span> — ${e.school}
-      <span class="exp-dates">${e.year}</span>
-      ${e.notes ? `<div style="font-size:12px;color:#555">${e.notes}</div>` : ""}
-    </div>`).join("");
+  const eduHTML = (data.education || []).map(e =>
+    `<div class="edu-row"><span>${e.degree} - ${e.school}</span></div>`
+  ).join("");
 
   const skillsHTML = (() => {
     const s = data.skills;
-    if (!s || (Array.isArray(s) && !s.length)) return "";
-    if (Array.isArray(s)) {
-      return `<div class="skills-list">${s.map(x => `<span class="skill-tag">${x}</span>`).join("")}</div>`;
-    }
-    return Object.entries(s).map(([group, items]) =>
-      `<div class="skill-group"><strong style="font-size:12px;color:#444">${group}:</strong> ${items.map(x => `<span class="skill-tag">${x}</span>`).join("")}</div>`
-    ).join("");
+    if (!s) return "";
+    if (Array.isArray(s)) return `<p>${s.join(" · ")}</p>`;
+    return Object.entries(s as Record<string, string[]>)
+      .map(([g, items]) => `<div class="skill-line"><strong>${g}:</strong> ${items.join(", ")}</div>`)
+      .join("");
   })();
 
-  const projectsHTML = (data.projects || []).length
-    ? (data.projects || []).map(p => `
-    <div class="exp-item">
-      <div class="exp-title">${p.name}</div>
-      <div style="font-size:12.5px;color:#333;margin-top:3px">${p.description}</div>
-    </div>`).join("")
-    : "";
+  const projectsHTML = (data.projects || []).map(p =>
+    `<div class="exp-block"><strong>${p.name}</strong><ul><li>${p.description}</li></ul></div>`
+  ).join("");
 
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Resume — ${name}</title>
+<title>${data.name || "Resume"}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Georgia', serif; color: #1a1a1a; background: #fff; padding: 48px 56px; max-width: 820px; margin: 0 auto; font-size: 13.5px; line-height: 1.6; }
-  h1 { font-size: 26px; letter-spacing: -0.5px; font-weight: 700; margin-bottom: 4px; }
-  .contact { color: #555; font-size: 12px; margin-bottom: 20px; }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: #444; border-bottom: 1.5px solid #222; padding-bottom: 4px; margin: 22px 0 12px; font-weight: 700; }
-  .summary { color: #333; margin-bottom: 4px; }
-  .exp-item { margin-bottom: 16px; }
-  .exp-header { display: flex; justify-content: space-between; align-items: baseline; }
-  .exp-title { font-weight: 700; font-size: 14px; }
-  .exp-dates { color: #666; font-size: 12px; }
-  .exp-company { color: #555; font-size: 12.5px; margin-bottom: 6px; font-style: italic; }
-  ul { padding-left: 18px; margin-top: 4px; }
-  li { margin-bottom: 3px; color: #222; }
-  .edu-item { margin-bottom: 8px; display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px; }
-  .skills-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-  .skill-tag { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 2px 10px; font-size: 12px; color: #334155; }
-  .skill-group { margin-bottom: 6px; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
-  .tailor-note { font-size: 11px; color: #94a3b8; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 8px; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; background: #fff;
+         padding: 36px 44px; max-width: 800px; margin: 0 auto; font-size: 11.5px; line-height: 1.45; }
+  .name { font-size: 15px; font-weight: 700; letter-spacing: 0.5px; text-align: center; margin-bottom: 2px; }
+  .contact { text-align: center; color: #444; font-size: 10.5px; margin-bottom: 10px; }
+  .section { margin-bottom: 8px; }
+  .sec-head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+              color: #1a6fa8; border-bottom: 1px solid #1a6fa8; padding-bottom: 2px; margin-bottom: 5px; }
+  .expertise { font-size: 11px; color: #222; line-height: 1.5; }
+  .summary-text { font-size: 11.5px; color: #222; line-height: 1.5; }
+  .exp-block { margin-bottom: 7px; }
+  .exp-row { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; }
+  .exp-row strong { font-size: 11.5px; color: #111; }
+  .meta { font-size: 10.5px; color: #555; white-space: nowrap; }
+  ul { padding-left: 14px; margin-top: 2px; }
+  li { margin-bottom: 1px; font-size: 11px; color: #222; line-height: 1.4; }
+  .edu-row { font-size: 11px; margin-bottom: 2px; }
+  .skill-line { font-size: 11px; margin-bottom: 2px; }
+  .skill-line strong { color: #111; }
   @media print {
-    body { padding: 24px 32px; }
-    .tailor-note { display: none; }
-    @page { margin: 0.6in; }
+    body { padding: 18px 28px; }
+    @page { margin: 0.5in; size: letter; }
   }
 </style>
 </head>
 <body>
-  <h1>${name}</h1>
+  <div class="name">${name}</div>
   <div class="contact">${contact}</div>
-  ${data.summary ? `<h2>Summary</h2><p class="summary">${data.summary}</p>` : ""}
-  ${expHTML ? `<h2>Experience</h2>${expHTML}` : ""}
-  ${eduHTML ? `<h2>Education</h2>${eduHTML}` : ""}
-  ${skillsHTML ? `<h2>Skills</h2>${skillsHTML}` : ""}
-  ${projectsHTML ? `<h2>Projects</h2>${projectsHTML}` : ""}
-  <p class="tailor-note">Tailored for: ${jobTitle} @ ${company}</p>
+  ${data.core_expertise ? sec("CORE EXPERTISE", `<div class="expertise">${data.core_expertise}</div>`) : ""}
+  ${data.summary ? sec("PROFILE", `<div class="summary-text">${data.summary}</div>`) : ""}
+  ${expHTML ? sec("PROFESSIONAL EXPERIENCE", expHTML) : ""}
+  ${projectsHTML ? sec("SELECTED PROJECTS", projectsHTML) : ""}
+  ${skillsHTML ? sec("TECHNICAL SKILLS", skillsHTML) : ""}
+  ${eduHTML ? sec("EDUCATION", eduHTML) : ""}
 </body>
 </html>`;
 }
@@ -242,79 +237,85 @@ export default function ApplicationPack({ result, onClose }: Props) {
 
 function ResumePreview({ data, fallback }: { data: ResumeData; fallback: string }) {
   if (!data.name && !data.experience?.length) {
-    return <div style={{ whiteSpace: "pre-wrap", fontSize: 12, fontFamily: "monospace" }}>{fallback}</div>;
+    return <div style={{ whiteSpace: "pre-wrap", fontSize: 11, fontFamily: "monospace" }}>{fallback}</div>;
   }
-  const contact = [data.email, data.phone, data.location].filter(Boolean).join(" · ");
+  const contact = [data.location, data.phone, data.email, data.github].filter(Boolean).join(" | ");
+  const headlineName = (data.headline || data.name || "").toUpperCase();
   return (
-    <div>
-      {data.name && <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 2 }}>{data.name}</div>}
-      {contact && <div style={{ fontSize: 12, color: "#666", marginBottom: 14 }}>{contact}</div>}
-      {data.summary && <><SectionHead>Summary</SectionHead><p>{data.summary}</p></>}
-      {data.experience?.length ? (
-        <><SectionHead>Experience</SectionHead>
+    <div style={{ fontFamily: "Arial, Helvetica, sans-serif", fontSize: 11.5, lineHeight: 1.45, color: "#111" }}>
+      {headlineName && <div style={{ fontSize: 14, fontWeight: 700, textAlign: "center", marginBottom: 2, letterSpacing: 0.5 }}>{headlineName}</div>}
+      {contact && <div style={{ fontSize: 10.5, color: "#444", textAlign: "center", marginBottom: 10 }}>{contact}</div>}
+
+      {data.core_expertise && <>
+        <SectionHead>CORE EXPERTISE</SectionHead>
+        <div style={{ fontSize: 11, color: "#222", marginBottom: 6 }}>{data.core_expertise}</div>
+      </>}
+
+      {data.summary && <>
+        <SectionHead>PROFILE</SectionHead>
+        <div style={{ fontSize: 11.5, color: "#222", marginBottom: 6 }}>{data.summary}</div>
+      </>}
+
+      {data.experience?.length ? <>
+        <SectionHead>PROFESSIONAL EXPERIENCE</SectionHead>
         {data.experience.map((e, i) => (
-          <div key={i} style={{ marginBottom: 14 }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <strong>{e.title}</strong><span style={{ fontSize: 11, color: "#666" }}>{e.dates}</span>
+          <div key={i} style={{ marginBottom: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap" }}>
+              <strong style={{ fontSize: 11.5 }}>{e.company} - {e.title}</strong>
+              <span style={{ fontSize: 10.5, color: "#555" }}>{e.dates}{e.location ? " | " + e.location : ""}</span>
             </div>
-            <div style={{ fontStyle: "italic", fontSize: 12, color: "#555", marginBottom: 4 }}>{e.company}</div>
-            <ul style={{ paddingLeft: 18, margin: 0 }}>
-              {(e.bullets || []).map((b, j) => <li key={j} style={{ marginBottom: 2 }}>{b}</li>)}
+            <ul style={{ paddingLeft: 14, margin: "2px 0 0" }}>
+              {(e.bullets || []).map((b, j) => <li key={j} style={{ fontSize: 11, marginBottom: 1, lineHeight: 1.4 }}>{b}</li>)}
             </ul>
           </div>
-        ))}</>
-      ) : null}
-      {data.education?.length ? (
-        <><SectionHead>Education</SectionHead>
-        {data.education.map((e, i) => (
-          <div key={i} style={{ marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
-            <span><strong>{e.degree}</strong> — {e.school}</span>
-            <span style={{ fontSize: 11, color: "#666" }}>{e.year}</span>
+        ))}
+      </> : null}
+
+      {data.projects?.length ? <>
+        <SectionHead>SELECTED PROJECTS</SectionHead>
+        {data.projects.map((p, i) => (
+          <div key={i} style={{ marginBottom: 6 }}>
+            <strong style={{ fontSize: 11.5 }}>{p.name}</strong>
+            <ul style={{ paddingLeft: 14, margin: "2px 0 0" }}>
+              <li style={{ fontSize: 11, lineHeight: 1.4 }}>{p.description}</li>
+            </ul>
           </div>
-        ))}</>
-      ) : null}
-      {data.skills && (Array.isArray(data.skills) ? data.skills.length > 0 : Object.keys(data.skills).length > 0) ? (
-        <><SectionHead>Skills</SectionHead>
+        ))}
+      </> : null}
+
+      {data.skills && (Array.isArray(data.skills) ? data.skills.length > 0 : Object.keys(data.skills).length > 0) ? <>
+        <SectionHead>TECHNICAL SKILLS</SectionHead>
         {Array.isArray(data.skills)
-          ? <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-              {data.skills.map((s, i) => (
-                <span key={i} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 4, padding: "1px 8px", fontSize: 11 }}>{s}</span>
-              ))}
-            </div>
+          ? <div style={{ fontSize: 11 }}>{data.skills.join(" · ")}</div>
           : Object.entries(data.skills as Record<string, string[]>).map(([group, items], gi) => (
-              <div key={gi} style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 5, alignItems: "center" }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#444", minWidth: 120 }}>{group}:</span>
-                {items.map((s, i) => (
-                  <span key={i} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 4, padding: "1px 8px", fontSize: 11 }}>{s}</span>
-                ))}
+              <div key={gi} style={{ fontSize: 11, marginBottom: 2 }}>
+                <strong>{group}:</strong> {items.join(", ")}
               </div>
             ))
-        }</>
-      ) : null}
-      {data.projects?.length ? (
-        <><SectionHead>Projects</SectionHead>
-        {data.projects.map((p, i) => (
-          <div key={i} style={{ marginBottom: 10 }}>
-            <strong style={{ fontSize: 13 }}>{p.name}</strong>
-            <div style={{ fontSize: 12, color: "#333", marginTop: 2 }}>{p.description}</div>
+        }
+      </> : null}
+
+      {data.education?.length ? <>
+        <SectionHead>EDUCATION</SectionHead>
+        {data.education.map((e, i) => (
+          <div key={i} style={{ fontSize: 11, marginBottom: 2 }}>
+            <strong>{e.degree}</strong> - {e.school}
           </div>
-        ))}</>
-      ) : null}
-      {data.ats_keywords?.length ? (
-        <><SectionHead>ATS Keywords</SectionHead>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-          {data.ats_keywords.map((k, i) => (
-            <span key={i} style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 4, padding: "1px 8px", fontSize: 11, color: "#1e40af" }}>{k}</span>
-          ))}
-        </div></>
-      ) : null}
+        ))}
+      </> : null}
+
+      {data.ats_keywords?.length ? <>
+        <SectionHead>ATS KEYWORDS</SectionHead>
+        <div style={{ fontSize: 10.5, color: "#1e40af" }}>{data.ats_keywords.join(" · ")}</div>
+      </> : null}
     </div>
   );
 }
 
 function SectionHead({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1.5, color: "#444", borderBottom: "1.5px solid #222", paddingBottom: 3, margin: "16px 0 8px", fontWeight: 700 }}>
+    <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700,
+      color: "#1a6fa8", borderBottom: "1px solid #1a6fa8", paddingBottom: 2, margin: "10px 0 5px" }}>
       {children}
     </div>
   );
