@@ -4,7 +4,7 @@ import asyncio
 import json
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 import httpx
@@ -272,7 +272,7 @@ def list_jobs(
         if raw_tags:
             query = query.filter(or_(*[JobRow.tags.like(f'%"{t}"%') for t in raw_tags]))
     if days is not None:
-        cutoff = datetime.utcnow() - __import__("datetime").timedelta(days=days)
+        cutoff = datetime.utcnow() - timedelta(days=days)
         query = query.filter(or_(JobRow.posted_date >= cutoff, JobRow.created_at >= cutoff))
 
     total = query.count()

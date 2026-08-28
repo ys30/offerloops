@@ -90,7 +90,7 @@ export default function App() {
   const [remote, setRemote] = useState<boolean | undefined>();
   const [source, setSource] = useState("");
   const [selectedIndustries, setSelectedIndustries] = useState<Set<string>>(new Set());
-  const [days, setDays] = useState<number | undefined>();
+  const [days, setDays] = useState<number | undefined>(60);
   const [sort, setSort] = useState("date");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
