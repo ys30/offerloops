@@ -90,6 +90,7 @@ export default function App() {
   const [remote, setRemote] = useState<boolean | undefined>();
   const [source, setSource] = useState("");
   const [selectedIndustries, setSelectedIndustries] = useState<Set<string>>(new Set());
+  const [days, setDays] = useState<number | undefined>();
   const [sort, setSort] = useState("date");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -105,6 +106,7 @@ export default function App() {
         remote,
         source: source || undefined,
         industries: selectedIndustries.size > 0 ? Array.from(selectedIndustries).join(",") : undefined,
+        days: days ?? undefined,
         sort: overrideSort ?? sort,
         limit: PAGE_SIZE,
         offset: (targetPage - 1) * PAGE_SIZE,
@@ -290,6 +292,17 @@ export default function App() {
               onChange={next => { setSelectedIndustries(next); setPage(1); }}
             />
           </div>
+          <select
+            style={selectStyle}
+            value={days === undefined ? "" : String(days)}
+            onChange={e => { setDays(e.target.value === "" ? undefined : Number(e.target.value)); setPage(1); }}
+          >
+            <option value="">Any date</option>
+            <option value="7">Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="60">Last 60 days</option>
+            <option value="90">Last 90 days</option>
+          </select>
           <select
             style={selectStyle}
             value={sort}

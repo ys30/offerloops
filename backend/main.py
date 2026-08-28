@@ -195,6 +195,7 @@ def list_jobs(
     min_score: Optional[float] = Query(None, description="Minimum AI fit score"),
     tag: Optional[str] = Query(None, description="Filter by raw tag (exact name)"),
     industries: Optional[str] = Query(None, description="Comma-separated consolidated industry names"),
+    days: Optional[int] = Query(None, description="Only show jobs posted within this many days"),
     sort: str = Query("date", description="Sort order: date | score"),
     limit: int = Query(50, le=500),
     offset: int = Query(0),
@@ -270,6 +271,9 @@ def list_jobs(
         raw_tags = [t for ind in ind_list for t in INDUSTRY_MAP.get(ind, [])]
         if raw_tags:
             query = query.filter(or_(*[JobRow.tags.like(f'%"{t}"%') for t in raw_tags]))
+    if days is not None:
+        cutoff = datetime.utcnow() - __import__("datetime").timedelta(days=days)
+        query = query.filter(or_(JobRow.posted_date >= cutoff, JobRow.created_at >= cutoff))
 
     total = query.count()
     if sort == "score":
