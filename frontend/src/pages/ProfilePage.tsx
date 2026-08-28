@@ -380,25 +380,34 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
             <label style={{ ...lbl, color: "#6d28d9" }}>Provider</label>
             <select
               value={aiProvider}
-              onChange={e => { setAiProvider(e.target.value); localStorage.setItem("ol_ai_provider", e.target.value); }}
+              onChange={e => {
+                setAiProvider(e.target.value);
+                localStorage.setItem("ol_ai_provider", e.target.value);
+                if (e.target.value === "nvidia") {
+                  setAiKey("");
+                  localStorage.removeItem("ol_ai_key");
+                }
+              }}
               style={{ padding: "8px 10px", border: "1px solid #d8b4fe", borderRadius: 6, fontSize: 13, background: "#fff", cursor: "pointer" }}
             >
-              <option value="nvidia">NVIDIA NIM (Llama 3.3 70B)</option>
-              <option value="anthropic">Claude (Anthropic)</option>
-              <option value="openai">OpenAI (GPT-4o)</option>
-              <option value="gemini">Google Gemini</option>
+              <option value="nvidia">NVIDIA NIM · Auto (no key needed)</option>
+              <option value="anthropic">Claude Opus 4.7 (your key)</option>
+              <option value="openai">GPT-4o (your key)</option>
+              <option value="gemini">Gemini 1.5 Pro (your key)</option>
             </select>
           </div>
-          <div style={{ flex: 1, minWidth: 240 }}>
-            <label style={{ ...lbl, color: "#6d28d9" }}>API Key</label>
-            <input
-              type="password"
-              value={aiKey}
-              onChange={e => { setAiKey(e.target.value); localStorage.setItem("ol_ai_key", e.target.value); }}
-              placeholder="Paste your API key here…"
-              style={{ ...inp, borderColor: "#d8b4fe" }}
-            />
-          </div>
+          {aiProvider !== "nvidia" && (
+            <div style={{ flex: 1, minWidth: 240 }}>
+              <label style={{ ...lbl, color: "#6d28d9" }}>API Key</label>
+              <input
+                type="password"
+                value={aiKey}
+                onChange={e => { setAiKey(e.target.value); localStorage.setItem("ol_ai_key", e.target.value); }}
+                placeholder="Paste your API key here…"
+                style={{ ...inp, borderColor: "#d8b4fe" }}
+              />
+            </div>
+          )}
           <button
             onClick={() => {
               localStorage.setItem("ol_ai_key", aiKey);
@@ -410,7 +419,11 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
             Save
           </button>
         </div>
-        {aiKey && (
+        {aiProvider === "nvidia" ? (
+          <div style={{ marginTop: 8, fontSize: 11, color: "#16a34a" }}>
+            ✓ NVIDIA NIM (Nemotron Ultra 550B) — built-in, no key required
+          </div>
+        ) : aiKey && (
           <div style={{ marginTop: 8, fontSize: 11, color: "#7c3aed" }}>
             ✓ Key saved — {aiProvider} · ends in …{aiKey.slice(-6)}
           </div>
@@ -604,14 +617,16 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <select value={aiProvider} onChange={e => { setAiProvider(e.target.value); localStorage.setItem("ol_ai_provider", e.target.value); }}
               style={{ padding: "6px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, background: "#fff", cursor: "pointer" }}>
-              <option value="nvidia">NVIDIA NIM</option>
-              <option value="anthropic">Claude</option>
-              <option value="openai">OpenAI</option>
-              <option value="gemini">Gemini</option>
+              <option value="nvidia">NVIDIA NIM · Auto</option>
+              <option value="anthropic">Claude Opus 4.7</option>
+              <option value="openai">GPT-4o</option>
+              <option value="gemini">Gemini 1.5 Pro</option>
             </select>
-            <input type="password" value={aiKey} onChange={e => { setAiKey(e.target.value); localStorage.setItem("ol_ai_key", e.target.value); }}
-              placeholder="API key (blank if set on server)"
-              style={{ padding: "6px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 220, boxSizing: "border-box" }} />
+            {aiProvider !== "nvidia" && (
+              <input type="password" value={aiKey} onChange={e => { setAiKey(e.target.value); localStorage.setItem("ol_ai_key", e.target.value); }}
+                placeholder="Your API key"
+                style={{ padding: "6px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 220, boxSizing: "border-box" }} />
+            )}
             <button
               onClick={() => projectFileRef.current?.click()}
               disabled={uploadingDoc}

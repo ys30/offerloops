@@ -188,18 +188,24 @@ export default function StoryBankPage({ onBack }: Props) {
             onChange={e => setProvider(e.target.value)}
             style={selectStyle}
           >
-            <option value="nvidia">NVIDIA NIM</option>
-            <option value="anthropic">Claude</option>
-            <option value="openai">OpenAI</option>
-            <option value="gemini">Gemini</option>
+            <option value="nvidia">NVIDIA NIM · Auto</option>
+            <option value="anthropic">Claude Opus 4.7</option>
+            <option value="openai">GPT-4o</option>
+            <option value="gemini">Gemini 1.5 Pro</option>
           </select>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={e => setApiKey(e.target.value)}
-            placeholder="API key (leave blank if set on server)"
-            style={{ ...inputStyle, width: 260, marginBottom: 0 }}
-          />
+          {provider !== "nvidia" ? (
+            <input
+              type="password"
+              value={apiKey}
+              onChange={e => setApiKey(e.target.value)}
+              placeholder="Your API key"
+              style={{ ...inputStyle, width: 260, marginBottom: 0 }}
+            />
+          ) : (
+            <span style={{ fontSize: 12, color: "#16a34a", padding: "6px 10px", background: "#f0fdf4", borderRadius: 5, border: "1px solid #bbf7d0" }}>
+              ✓ Built-in — no key needed
+            </span>
+          )}
           <button onClick={handleGenerate} disabled={generating} style={aiBtn}>
             {generating ? "Generating…" : "✨ AI Generate from Resume"}
           </button>

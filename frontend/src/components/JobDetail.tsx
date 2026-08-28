@@ -25,10 +25,10 @@ interface Props {
 }
 
 const PROVIDERS = [
-  { id: "nvidia",    label: "NVIDIA NIM (Llama 3.3 70B)" },
-  { id: "anthropic", label: "Claude Opus 4.7" },
-  { id: "openai",    label: "GPT-4o" },
-  { id: "gemini",    label: "Gemini 1.5 Pro" },
+  { id: "nvidia",    label: "NVIDIA NIM · Auto", auto: true },
+  { id: "anthropic", label: "Claude Opus 4.7",   auto: false },
+  { id: "openai",    label: "GPT-4o",             auto: false },
+  { id: "gemini",    label: "Gemini 1.5 Pro",     auto: false },
 ];
 
 export default function JobDetail({ job, onBack, onDeleted }: Props) {
@@ -263,13 +263,19 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
             rows={5}
             style={textareaStyle}
           />
-          <input
-            type="password"
-            value={apiKey}
-            onChange={e => { setApiKey(e.target.value); localStorage.setItem("ol_ai_key", e.target.value); }}
-            placeholder={`${PROVIDERS.find(p => p.id === provider)?.label} API key (optional if set on server)`}
-            style={{ ...inputStyle, marginTop: 8 }}
-          />
+          {PROVIDERS.find(p => p.id === provider)?.auto ? (
+            <div style={{ marginTop: 8, fontSize: 12, color: "#16a34a", padding: "6px 10px", background: "#f0fdf4", borderRadius: 5, border: "1px solid #bbf7d0" }}>
+              ✓ Built-in key — no API key needed
+            </div>
+          ) : (
+            <input
+              type="password"
+              value={apiKey}
+              onChange={e => { setApiKey(e.target.value); localStorage.setItem("ol_ai_key", e.target.value); }}
+              placeholder={`${PROVIDERS.find(p => p.id === provider)?.label} API key`}
+              style={{ ...inputStyle, marginTop: 8 }}
+            />
+          )}
           {error && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 6 }}>{error}</div>}
           <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
             <button

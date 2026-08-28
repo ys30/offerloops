@@ -1732,7 +1732,7 @@ async def generate_application_pack(
 
 @app.post("/api/ai/score-all", tags=["ai"])
 async def score_all_jobs(
-    provider: str = Query("anthropic", description="AI provider: anthropic|openai|nvidia|gemini"),
+    provider: str = Query("nvidia", description="AI provider: anthropic|openai|nvidia|gemini"),
     api_key: Optional[str] = Query(None, description="Provider API key (BYOK)"),
     model: Optional[str] = Query(None),
     rescore: bool = Query(False, description="Re-score jobs that already have a score"),
@@ -3020,4 +3020,4 @@ if FRONTEND_DIST.exists():
     @app.get("/{full_path:path}", include_in_schema=False)
     def serve_frontend(full_path: str):
         index = FRONTEND_DIST / "index.html"
-        return FileResponse(index)
+        return FileResponse(index, headers={"Cache-Control": "no-store"})

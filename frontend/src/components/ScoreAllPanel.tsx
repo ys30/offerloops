@@ -3,10 +3,10 @@ import { getToken } from "../api";
 import IndustryMultiSelect from "./IndustryMultiSelect";
 
 const PROVIDERS = [
-  { id: "anthropic", label: "Claude Opus 4.7" },
-  { id: "nvidia",    label: "NVIDIA NIM (Llama 3.3 70B)" },
-  { id: "openai",    label: "GPT-4o" },
-  { id: "gemini",    label: "Gemini 1.5 Pro" },
+  { id: "nvidia",    label: "NVIDIA NIM · Auto", auto: true },
+  { id: "anthropic", label: "Claude Opus 4.7",   auto: false },
+  { id: "openai",    label: "GPT-4o",             auto: false },
+  { id: "gemini",    label: "Gemini 1.5 Pro",     auto: false },
 ];
 
 const US_STATES = [
@@ -64,7 +64,7 @@ interface Props {
 }
 
 export default function ScoreAllPanel({ user, onSignIn, onDone, onClose }: Props) {
-  const [provider, setProvider] = useState("anthropic");
+  const [provider, setProvider] = useState("nvidia");
   const [apiKey, setApiKey] = useState("");
   const [rescore, setRescore] = useState(false);
   const [days, setDays] = useState("7");
@@ -390,16 +390,22 @@ export default function ScoreAllPanel({ user, onSignIn, onDone, onClose }: Props
       </div>
 
       {/* API key */}
-      <div style={{ marginBottom: 10 }}>
-        <input
-          type="password"
-          value={apiKey}
-          onChange={e => setApiKey(e.target.value)}
-          disabled={running}
-          placeholder="API key (optional — uses server key if set)"
-          style={{ ...inp, width: "100%" }}
-        />
-      </div>
+      {PROVIDERS.find(p => p.id === provider)?.auto ? (
+        <div style={{ marginBottom: 10, fontSize: 12, color: "#16a34a", padding: "6px 10px", background: "#f0fdf4", borderRadius: 5, border: "1px solid #bbf7d0" }}>
+          ✓ Built-in key — no API key needed
+        </div>
+      ) : (
+        <div style={{ marginBottom: 10 }}>
+          <input
+            type="password"
+            value={apiKey}
+            onChange={e => setApiKey(e.target.value)}
+            disabled={running}
+            placeholder="Your API key"
+            style={{ ...inp, width: "100%" }}
+          />
+        </div>
+      )}
 
       {startError && (
         <div style={{ color: "#dc2626", fontSize: 12, marginBottom: 8, padding: "6px 10px", background: "#fef2f2", borderRadius: 5 }}>
