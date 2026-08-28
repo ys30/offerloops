@@ -273,11 +273,11 @@ def list_jobs(
 
     total = query.count()
     if sort == "score":
-        rows = query.order_by(JobRow.ai_score.desc().nulls_last(), JobRow.created_at.desc()).offset(offset).limit(limit).all()
+        rows = query.order_by(JobRow.ai_score.desc().nulls_last(), JobRow.posted_date.desc().nulls_last(), JobRow.created_at.desc()).offset(offset).limit(limit).all()
     elif sort == "score_date":
-        rows = query.order_by(JobRow.ai_score.desc().nulls_last(), JobRow.created_at.desc()).offset(offset).limit(limit).all()
+        rows = query.order_by(JobRow.ai_score.desc().nulls_last(), JobRow.posted_date.desc().nulls_last(), JobRow.created_at.desc()).offset(offset).limit(limit).all()
     else:
-        rows = query.order_by(JobRow.created_at.desc()).offset(offset).limit(limit).all()
+        rows = query.order_by(JobRow.posted_date.desc().nulls_last(), JobRow.created_at.desc()).offset(offset).limit(limit).all()
     jobs = [row_to_job(r) for r in rows]
     return JSONResponse(
         content=[j.model_dump(mode="json") for j in jobs],
