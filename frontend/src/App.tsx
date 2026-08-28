@@ -354,25 +354,7 @@ export default function App() {
               />
             ))}
             {total > PAGE_SIZE && (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, padding: "16px 0" }}>
-                <button
-                  onClick={() => setPage(p => p - 1)}
-                  disabled={page === 1}
-                  style={{ ...secondaryBtn, opacity: page === 1 ? 0.4 : 1, cursor: page === 1 ? "default" : "pointer" }}
-                >
-                  ← Prev
-                </button>
-                <span style={{ fontSize: 13, color: "#64748b" }}>
-                  Page {page} of {Math.ceil(total / PAGE_SIZE)}
-                </span>
-                <button
-                  onClick={() => setPage(p => p + 1)}
-                  disabled={page * PAGE_SIZE >= total}
-                  style={{ ...secondaryBtn, opacity: page * PAGE_SIZE >= total ? 0.4 : 1, cursor: page * PAGE_SIZE >= total ? "default" : "pointer" }}
-                >
-                  Next →
-                </button>
-              </div>
+              <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPage={setPage} />
             )}
           </div>
         )}
@@ -384,6 +366,78 @@ export default function App() {
           onClose={() => setShowAdd(false)}
         />
       )}
+    </div>
+  );
+}
+
+function Pagination({ page, total, pageSize, onPage }: { page: number; total: number; pageSize: number; onPage: (p: number) => void }) {
+  const [jumpVal, setJumpVal] = useState("");
+  const totalPages = Math.ceil(total / pageSize);
+
+  const delta = 2;
+  const pages: (number | "…")[] = [];
+  const rangeStart = Math.max(2, page - delta);
+  const rangeEnd = Math.min(totalPages - 1, page + delta);
+  pages.push(1);
+  if (rangeStart > 2) pages.push("…");
+  for (let i = rangeStart; i <= rangeEnd; i++) pages.push(i);
+  if (rangeEnd < totalPages - 1) pages.push("…");
+  if (totalPages > 1) pages.push(totalPages);
+
+  function jump() {
+    const n = parseInt(jumpVal, 10);
+    if (!isNaN(n) && n >= 1 && n <= totalPages) { onPage(n); setJumpVal(""); }
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "16px 0", flexWrap: "wrap" }}>
+      <button
+        onClick={() => onPage(page - 1)}
+        disabled={page === 1}
+        style={{ ...secondaryBtn, opacity: page === 1 ? 0.4 : 1, cursor: page === 1 ? "default" : "pointer" }}
+      >
+        ← Prev
+      </button>
+      {pages.map((p, i) =>
+        p === "…" ? (
+          <span key={`e${i}`} style={{ fontSize: 13, color: "#94a3b8" }}>…</span>
+        ) : (
+          <button
+            key={p}
+            onClick={() => onPage(p as number)}
+            style={{
+              ...secondaryBtn,
+              minWidth: 36,
+              padding: "9px 10px",
+              background: page === p ? "#2563eb" : "#fff",
+              color: page === p ? "#fff" : "#334155",
+              border: page === p ? "1px solid #2563eb" : "1px solid #e2e8f0",
+              fontWeight: page === p ? 700 : 400,
+            }}
+          >
+            {p}
+          </button>
+        )
+      )}
+      <button
+        onClick={() => onPage(page + 1)}
+        disabled={page * pageSize >= total}
+        style={{ ...secondaryBtn, opacity: page * pageSize >= total ? 0.4 : 1, cursor: page * pageSize >= total ? "default" : "pointer" }}
+      >
+        Next →
+      </button>
+      <span style={{ fontSize: 12, color: "#94a3b8", marginLeft: 8 }}>Go to</span>
+      <input
+        type="number"
+        min={1}
+        max={totalPages}
+        value={jumpVal}
+        onChange={e => setJumpVal(e.target.value)}
+        onKeyDown={e => e.key === "Enter" && jump()}
+        placeholder="page"
+        style={{ ...searchInput, width: 60, padding: "7px 8px", fontSize: 13 }}
+      />
+      <button onClick={jump} style={{ ...secondaryBtn, padding: "9px 12px" }}>Go</button>
     </div>
   );
 }

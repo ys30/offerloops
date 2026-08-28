@@ -35,6 +35,18 @@ function formatSalary(job: Job): string {
   return `${fmt(job.salary.min ?? job.salary.max ?? 0)}${period}`;
 }
 
+function fmtDate(raw: string): string {
+  const d = new Date(raw);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function deadlineUrgency(raw: string): "overdue" | "soon" | "ok" {
+  const diff = (new Date(raw).getTime() - Date.now()) / 86400000;
+  if (diff < 0) return "overdue";
+  if (diff <= 7) return "soon";
+  return "ok";
+}
+
 function formatLocation(job: Job): string {
   if (job.location.remote) return "Remote";
   const parts = [job.location.city, job.location.state].filter(Boolean);
@@ -118,6 +130,18 @@ export default function JobCard({ job, onSelect, onStatusChange }: Props) {
         {formatSalary(job) && (
           <span style={{ fontSize: 12, color: "#718096" }}>· {formatSalary(job)}</span>
         )}
+        <span style={{ fontSize: 12, color: "#94a3b8" }}>
+          📅 {job.posted_date ? fmtDate(job.posted_date) : fmtDate(job.created_at)}
+        </span>
+        {job.deadline && (() => {
+          const urgency = deadlineUrgency(job.deadline);
+          const color = urgency === "overdue" ? "#dc2626" : urgency === "soon" ? "#d97706" : "#94a3b8";
+          return (
+            <span style={{ fontSize: 12, color, fontWeight: urgency !== "ok" ? 600 : 400 }}>
+              ⏰ {urgency === "overdue" ? "Expired" : "Deadline"}:{" "}{fmtDate(job.deadline)}
+            </span>
+          );
+        })()}
         <span style={{ fontSize: 11, background: color + "22", color, borderRadius: 4, padding: "1px 7px", fontWeight: 600 }}>
           {job.source.toUpperCase()}
         </span>

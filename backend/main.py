@@ -273,11 +273,11 @@ def list_jobs(
 
     total = query.count()
     if sort == "score":
-        rows = query.order_by(JobRow.ai_score.desc().nulls_last(), JobRow.posted_date.desc()).offset(offset).limit(limit).all()
+        rows = query.order_by(JobRow.ai_score.desc().nulls_last(), JobRow.created_at.desc()).offset(offset).limit(limit).all()
     elif sort == "score_date":
-        rows = query.order_by(JobRow.ai_score.desc().nulls_last(), JobRow.posted_date.desc()).offset(offset).limit(limit).all()
+        rows = query.order_by(JobRow.ai_score.desc().nulls_last(), JobRow.created_at.desc()).offset(offset).limit(limit).all()
     else:
-        rows = query.order_by(JobRow.posted_date.desc()).offset(offset).limit(limit).all()
+        rows = query.order_by(JobRow.created_at.desc()).offset(offset).limit(limit).all()
     jobs = [row_to_job(r) for r in rows]
     return JSONResponse(
         content=[j.model_dump(mode="json") for j in jobs],
@@ -3015,7 +3015,12 @@ async def manual_refresh(db: Session = Depends(get_db)):
 FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
 
 if FRONTEND_DIST.exists():
-    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+    @app.get("/assets/{file_path:path}", include_in_schema=False)
+    def serve_asset(file_path: str):
+        asset = FRONTEND_DIST / "assets" / file_path
+        if not asset.exists():
+            raise HTTPException(status_code=404)
+        return FileResponse(str(asset), headers={"Cache-Control": "no-store"})
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def serve_frontend(full_path: str):
