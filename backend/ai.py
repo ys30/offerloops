@@ -92,11 +92,13 @@ Only include fields clearly implied by the query. Use empty strings for absent f
 
 def _strip_json(raw: str) -> str:
     raw = raw.strip()
+    # Strip reasoning/thinking blocks (Nemotron, DeepSeek, o1-style)
+    raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
     # Strip markdown code fences
     if raw.startswith("```"):
         raw = re.sub(r"^```[a-z]*\n?", "", raw)
         raw = re.sub(r"```$", "", raw).strip()
-    # If model added prose before/after the JSON, extract the object
+    # Extract JSON object if surrounded by prose
     if not raw.startswith("{"):
         m = re.search(r"\{.*\}", raw, re.DOTALL)
         if m:
@@ -387,13 +389,19 @@ async def tailor_resume(
     last_err: Exception = RuntimeError("Unknown error")
     for attempt in range(2):
         try:
-            raw = await _call_provider(resolved_provider, resolved_model, TAILOR_RESUME_SYSTEM, user_msg, resolved_key, max_tokens=2000)
-            return json.loads(_strip_json(raw))
+            raw = await _call_provider(resolved_provider, resolved_model, TAILOR_RESUME_SYSTEM, user_msg, resolved_key, max_tokens=3500)
+            stripped = _strip_json(raw)
+            if not stripped or not stripped.startswith("{"):
+                raise RuntimeError(
+                    f"Model returned no parseable JSON (attempt {attempt+1}). "
+                    f"Raw response starts with: {raw[:120]!r}"
+                )
+            return json.loads(stripped)
         except (json.JSONDecodeError, RuntimeError) as e:
             last_err = e
             if attempt == 1:
                 raise ValueError(
-                    f"Resume generation failed after 2 attempts: {e}. "
+                    f"Resume generation failed after 2 attempts: {last_err}. "
                     "Try again or switch to a different AI provider."
                 ) from e
     raise last_err
