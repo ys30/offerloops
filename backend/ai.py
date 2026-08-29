@@ -386,27 +386,33 @@ async def tailor_resume(
         f"Job Description:\n{job_description[:6000]}\n\n"
         f"Base Resume:\n{resume_text[:8000]}"
         f"{edu_note}\n\n"
-        f"Output the tailored resume JSON:"
+        f"Output the JSON now. Begin your response immediately with {{ and end with }}. No reasoning, no explanation, no preamble — only the JSON object:"
     )
+
+    # Large reasoning models (nemotron-ultra) output planning prose before JSON and run out of tokens.
+    # On failure, retry with a smaller instruction-following model.
+    fallback_model = None
+    if resolved_provider == "nvidia" and "ultra" in resolved_model:
+        fallback_model = "nvidia/llama-3.1-nemotron-70b-instruct"
+
+    models_to_try = [resolved_model] + ([fallback_model] if fallback_model else [])
     last_err: Exception = RuntimeError("Unknown error")
-    for attempt in range(2):
+    for try_model in models_to_try:
         try:
-            raw = await _call_provider(resolved_provider, resolved_model, TAILOR_RESUME_SYSTEM, user_msg, resolved_key, max_tokens=3500)
+            raw = await _call_provider(resolved_provider, try_model, TAILOR_RESUME_SYSTEM, user_msg, resolved_key, max_tokens=3500)
             stripped = _strip_json(raw)
             if not stripped or not stripped.startswith("{"):
                 raise RuntimeError(
-                    f"Model returned no parseable JSON (attempt {attempt+1}). "
-                    f"Raw response starts with: {raw[:120]!r}"
+                    f"Model ({try_model}) returned no parseable JSON. "
+                    f"Response starts with: {raw[:120]!r}"
                 )
             return json.loads(stripped)
         except (json.JSONDecodeError, RuntimeError) as e:
             last_err = e
-            if attempt == 1:
-                raise ValueError(
-                    f"Resume generation failed after 2 attempts: {last_err}. "
-                    "Try again or switch to a different AI provider."
-                ) from e
-    raise last_err
+
+    raise ValueError(
+        f"Resume generation failed: {last_err}. Try switching to a different AI provider."
+    )
 
 
 def _extract_cover_letter(raw: str) -> str:
