@@ -309,7 +309,8 @@ RULES:
 - Vary sentence structure; avoid repetitive openings ("I have", "I am", "My experience")
 - Every sentence must be specific: no vague claims like "I am passionate about" or "I bring strong skills"
 - Professional but human tone — not stiff or bureaucratic
-- Output plain text only, no markdown, no headers"""
+- Output plain text only, no markdown, no headers
+- CRITICAL: Output ONLY the final cover letter. No planning, no analysis, no reasoning, no word counts, no paragraph labels, no internal notes. Start directly with the first sentence of the letter and end with "Sincerely," followed by the candidate's name. Nothing before or after."""
 
 
 def _extract_education_block(resume_text: str) -> str:
@@ -380,6 +381,33 @@ async def tailor_resume(
     return json.loads(_strip_json(raw))
 
 
+def _extract_cover_letter(raw: str) -> str:
+    """Strip model reasoning/planning that leaks before the actual letter."""
+    lines = raw.strip().splitlines()
+    # Find the first line that looks like the start of a real letter paragraph
+    # (starts with "Dear", "My ", "I ", or a capital letter after a blank line)
+    letter_start = 0
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith(("Dear ", "My ", "I ", "As a", "As an", "With my", "With a")):
+            letter_start = i
+            break
+        # If we hit "Sincerely" near top, something is wrong — return raw
+    # Cut off anything after a second "Sincerely" (duplicate closings)
+    result = "\n".join(lines[letter_start:])
+    # Truncate at the closing signature
+    for closing in ["Sincerely,", "Best regards,", "Warm regards,"]:
+        idx = result.find(closing)
+        if idx != -1:
+            # Keep everything up to and including the name after closing
+            end = result.find("\n", idx + len(closing) + 1)
+            if end == -1:
+                end = len(result)
+            result = result[:end].strip()
+            break
+    return result
+
+
 async def generate_cover_letter(
     job_title: str,
     company: str,
@@ -391,8 +419,14 @@ async def generate_cover_letter(
 ) -> str:
     resolved_provider, resolved_key = _pick_provider(provider, api_key)
     resolved_model = model or PROVIDERS[resolved_provider]["default_model"]
-    user_msg = f"Job Title: {job_title}\nCompany: {company}\n\nJob Description:\n{job_description[:4000]}\n\nResume:\n{resume_text[:3500]}\n\nWrite the cover letter:"
-    return await _call_provider(resolved_provider, resolved_model, COVER_LETTER_SYSTEM, user_msg, resolved_key, max_tokens=1000)
+    user_msg = (
+        f"Job Title: {job_title}\nCompany: {company}\n\n"
+        f"Job Description:\n{job_description[:4000]}\n\n"
+        f"Resume:\n{resume_text[:3500]}\n\n"
+        f"Write the cover letter now. Begin immediately with the first sentence — no preamble, no planning, no notes:"
+    )
+    raw = await _call_provider(resolved_provider, resolved_model, COVER_LETTER_SYSTEM, user_msg, resolved_key, max_tokens=1000)
+    return _extract_cover_letter(raw)
 
 
 def _pick_provider(preferred: str, api_key: Optional[str]) -> tuple[str, str]:
