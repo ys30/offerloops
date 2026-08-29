@@ -97,8 +97,8 @@ function buildResumeHTML(data: ResumeData, jobTitle: string, company: string): s
 <body>
   <div class="name">${name}</div>
   <div class="contact">${contact}</div>
-  ${data.core_expertise ? sec("CORE EXPERTISE", `<div class="expertise">${data.core_expertise}</div>`) : ""}
   ${data.summary ? sec("PROFILE", `<div class="summary-text">${data.summary}</div>`) : ""}
+  ${data.core_expertise ? sec("CORE EXPERTISE", `<div class="expertise">${data.core_expertise}</div>`) : ""}
   ${expHTML ? sec("PROFESSIONAL EXPERIENCE", expHTML) : ""}
   ${projectsHTML ? sec("SELECTED PROJECTS", projectsHTML) : ""}
   ${skillsHTML ? sec("TECHNICAL SKILLS", skillsHTML) : ""}
@@ -246,14 +246,14 @@ function ResumePreview({ data, fallback }: { data: ResumeData; fallback: string 
       {headlineName && <div style={{ fontSize: 14, fontWeight: 700, textAlign: "center", marginBottom: 2, letterSpacing: 0.5 }}>{headlineName}</div>}
       {contact && <div style={{ fontSize: 10.5, color: "#444", textAlign: "center", marginBottom: 10 }}>{contact}</div>}
 
-      {data.core_expertise && <>
-        <SectionHead>CORE EXPERTISE</SectionHead>
-        <div style={{ fontSize: 11, color: "#222", marginBottom: 6 }}>{data.core_expertise}</div>
-      </>}
-
       {data.summary && <>
         <SectionHead>PROFILE</SectionHead>
         <div style={{ fontSize: 11.5, color: "#222", marginBottom: 6 }}>{data.summary}</div>
+      </>}
+
+      {data.core_expertise && <>
+        <SectionHead>CORE EXPERTISE</SectionHead>
+        <div style={{ fontSize: 11, color: "#222", marginBottom: 6 }}>{data.core_expertise}</div>
       </>}
 
       {data.experience?.length ? <>

@@ -443,8 +443,22 @@ async def generate_cover_letter(
         f"Resume:\n{resume_text[:3500]}\n\n"
         f"Write the cover letter now. Begin immediately with the first sentence — no preamble, no planning, no notes:"
     )
-    raw = await _call_provider(resolved_provider, resolved_model, COVER_LETTER_SYSTEM, user_msg, resolved_key, max_tokens=1000)
-    return _extract_cover_letter(raw)
+    last_err: Exception = RuntimeError("Unknown error")
+    for attempt in range(2):
+        try:
+            raw = await _call_provider(resolved_provider, resolved_model, COVER_LETTER_SYSTEM, user_msg, resolved_key, max_tokens=1000)
+            result = _extract_cover_letter(raw)
+            if result.strip():
+                return result
+            raise RuntimeError("Cover letter extraction returned empty — model may have returned unusable content.")
+        except RuntimeError as e:
+            last_err = e
+            if attempt == 1:
+                raise ValueError(
+                    f"Cover letter generation failed after 2 attempts: {e}. "
+                    "Try again or switch to a different AI provider."
+                ) from e
+    raise last_err
 
 
 def _pick_provider(preferred: str, api_key: Optional[str]) -> tuple[str, str]:
