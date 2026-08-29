@@ -1651,10 +1651,6 @@ async def generate_application_pack(
         from .profile import get_profile
         pack_profile = get_profile(db, user_id)
     if pack_profile:
-        from .links_fetcher import build_links_context
-        links_ctx = await build_links_context(pack_profile)
-        if links_ctx:
-            resume_text = resume_text + "\n\n--- Additional context from profile links ---\n" + links_ctx
         # Inject structured education entries so they are never lost to truncation
         edu_raw = getattr(pack_profile, "education_json", None) or "[]"
         try:

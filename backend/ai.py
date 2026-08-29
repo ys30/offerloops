@@ -376,7 +376,7 @@ async def tailor_resume(
         f"{edu_note}\n\n"
         f"Output the tailored resume JSON:"
     )
-    raw = await _call_provider(resolved_provider, resolved_model, TAILOR_RESUME_SYSTEM, user_msg, resolved_key, max_tokens=3500)
+    raw = await _call_provider(resolved_provider, resolved_model, TAILOR_RESUME_SYSTEM, user_msg, resolved_key, max_tokens=2000)
     return json.loads(_strip_json(raw))
 
 
