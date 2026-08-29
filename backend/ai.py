@@ -237,7 +237,7 @@ STYLE GUIDE — this defines the voice and density:
 - Writing is direct, specific, and professional — never generic ("utilized tools to support projects" is banned)
 
 RULES:
-1. FACTS: Never invent companies, dates, degrees, or credentials. Copy all factual details exactly as given.
+1. FACTS: Never invent companies, dates, degrees, credentials, metrics, percentages, or outcomes. Every factual claim — every number, every scale, every result — must come directly from the base resume. Do not fabricate or "infer plausible" figures. If the original says nothing quantitative about a task, describe the work accurately without inventing numbers.
 2. EDUCATION: Copy EVERY degree from the "EDUCATION SECTION" block in reverse chronological order. Expand abbreviations (MAP → Master of Public Affairs (MAP)). Copy school names character-for-character. Never add placeholder text.
 3. LENGTH: Strict one-page. Enforce every limit below — this is the #1 constraint:
    - Profile/summary: 2 sentences maximum, no more
@@ -247,12 +247,11 @@ RULES:
    - Skills: 3–4 groups, max 4 items per group — use inline text not tags
    - Education: degree + school + year only, no notes
    - Projects: omit unless directly matching a core JD requirement; if included, max 1, one sentence
-4. BULLETS: Every bullet must have THREE elements: (1) strong past-tense action verb, (2) specific tool/method/standard named, (3) quantified result or scale. If the resume contains no metrics, infer plausible scope from context (e.g. dataset size, team size, time saved, number of stakeholders, coverage area). Never write a bullet without a number or measurable outcome.
-   Formula: [Verb] + [specific method/tool] + [scope/scale] + [quantified result]
-   Good: "Engineered reproducible GIS/MCDA pipeline integrating 6 data layers across 3 candidate regions, reducing site-selection analysis time by ~40%"
-   Good: "Conducted Scope 1–3 GHG accounting for 12+ case studies covering 4 emission categories, supporting SBTi target-setting for 200+ students"
-   Bad: "Used GIS tools to support analysis"
-   Bad: "Developed pipelines for sustainability research" (no number, no specific method)
+4. BULLETS: Each bullet must name (1) a strong action verb, (2) a specific tool/method/standard from the original resume, and (3) the actual scope or outcome as described in the original. Only include a number if the base resume states one. If no metric exists, describe the scope honestly (e.g. "institution-wide", "multi-site", "cross-functional") without fabricating percentages or impact claims.
+   Formula: [Verb] + [specific method/tool from resume] + [actual scope] + [real outcome if stated]
+   Good (metric exists in resume): "Reduced manual reconciliation time by 40% by automating SQL-based ETL workflows across campus financial systems"
+   Good (no metric in resume): "Built automated SQL/Power BI reporting pipeline consolidating procurement, payroll, and grant data for institutional budget monitoring"
+   Bad: invented numbers not in original ("reduced costs by 60%", "served 200+ stakeholders") — fabricating these damages credibility
 5. PROFILE: 2 sentences. Sentence 1: role title from JD + top domain expertise. Sentence 2: key methodological strengths + tools. No degree-leading openers.
 6. CORE EXPERTISE: 6–8 pipe-separated competencies directly matching JD keywords. Be specific: "Corporate Carbon Accounting & Scope 1–3" not "Carbon".
 7. SKILLS: Inline grouped text — "Programming & Data: Python, R, SQL, Power BI | Spatial & Modeling: GIS, scenario modeling, time-series analysis"
