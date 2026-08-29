@@ -59,7 +59,7 @@ function buildResumeHTML(data: ResumeData, jobTitle: string, company: string): s
       .join("");
   })();
 
-  const projectsHTML = (data.projects || []).map(p =>
+  const projectsHTML = (data.projects || []).filter(p => p.name && p.description).map(p =>
     `<div class="exp-block"><strong>${p.name}</strong><ul><li>${p.description}</li></ul></div>`
   ).join("");
 
@@ -271,9 +271,9 @@ function ResumePreview({ data, fallback }: { data: ResumeData; fallback: string 
         ))}
       </> : null}
 
-      {data.projects?.length ? <>
+      {data.projects?.filter(p => p.name && p.description).length ? <>
         <SectionHead>SELECTED PROJECTS</SectionHead>
-        {data.projects.map((p, i) => (
+        {data.projects.filter(p => p.name && p.description).map((p, i) => (
           <div key={i} style={{ marginBottom: 6 }}>
             <strong style={{ fontSize: 11.5 }}>{p.name}</strong>
             <ul style={{ paddingLeft: 14, margin: "2px 0 0" }}>
