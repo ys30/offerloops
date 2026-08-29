@@ -71,26 +71,26 @@ function buildResumeHTML(data: ResumeData, jobTitle: string, company: string): s
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, Helvetica, sans-serif; color: #111; background: #fff;
-         padding: 36px 44px; max-width: 800px; margin: 0 auto; font-size: 11.5px; line-height: 1.45; }
-  .name { font-size: 15px; font-weight: 700; letter-spacing: 0.5px; text-align: center; margin-bottom: 2px; }
-  .contact { text-align: center; color: #444; font-size: 10.5px; margin-bottom: 10px; }
-  .section { margin-bottom: 8px; }
-  .sec-head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
-              color: #1a6fa8; border-bottom: 1px solid #1a6fa8; padding-bottom: 2px; margin-bottom: 5px; }
-  .expertise { font-size: 11px; color: #222; line-height: 1.5; }
-  .summary-text { font-size: 11.5px; color: #222; line-height: 1.5; }
-  .exp-block { margin-bottom: 7px; }
+         padding: 28px 38px; max-width: 780px; margin: 0 auto; font-size: 10.5px; line-height: 1.35; }
+  .name { font-size: 13.5px; font-weight: 700; letter-spacing: 0.5px; text-align: center; margin-bottom: 1px; }
+  .contact { text-align: center; color: #444; font-size: 9.5px; margin-bottom: 7px; }
+  .section { margin-bottom: 6px; }
+  .sec-head { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+              color: #1a6fa8; border-bottom: 1px solid #1a6fa8; padding-bottom: 1px; margin-bottom: 4px; }
+  .expertise { font-size: 10px; color: #222; line-height: 1.4; }
+  .summary-text { font-size: 10.5px; color: #222; line-height: 1.4; }
+  .exp-block { margin-bottom: 5px; }
   .exp-row { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; }
-  .exp-row strong { font-size: 11.5px; color: #111; }
-  .meta { font-size: 10.5px; color: #555; white-space: nowrap; }
-  ul { padding-left: 14px; margin-top: 2px; }
-  li { margin-bottom: 1px; font-size: 11px; color: #222; line-height: 1.4; }
-  .edu-row { font-size: 11px; margin-bottom: 2px; }
-  .skill-line { font-size: 11px; margin-bottom: 2px; }
+  .exp-row strong { font-size: 10.5px; color: #111; }
+  .meta { font-size: 9.5px; color: #555; white-space: nowrap; }
+  ul { padding-left: 12px; margin-top: 1px; }
+  li { margin-bottom: 0; font-size: 10px; color: #222; line-height: 1.35; }
+  .edu-row { font-size: 10px; margin-bottom: 1px; }
+  .skill-line { font-size: 10px; margin-bottom: 1px; }
   .skill-line strong { color: #111; }
   @media print {
-    body { padding: 18px 28px; }
-    @page { margin: 0.5in; size: letter; }
+    body { padding: 0; font-size: 10px; }
+    @page { margin: 0.35in 0.4in; size: letter; }
   }
 </style>
 </head>
