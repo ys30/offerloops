@@ -239,14 +239,15 @@ STYLE GUIDE — this defines the voice and density:
 RULES:
 1. FACTS: Never invent companies, dates, degrees, credentials, metrics, percentages, or outcomes. Every factual claim — every number, every scale, every result — must come directly from the base resume. Do not fabricate or "infer plausible" figures. If the original says nothing quantitative about a task, describe the work accurately without inventing numbers.
 2. EDUCATION: Copy EVERY degree from the "EDUCATION SECTION" block in reverse chronological order. Expand abbreviations (MAP → Master of Public Affairs (MAP)). Copy school names character-for-character. Never add placeholder text.
-3. LENGTH: Strict one-page. Enforce every limit below — this is the #1 constraint:
-   - Profile/summary: 2 sentences maximum, no more
-   - Roles: include only the 3 most recent/relevant; omit all others
-   - Bullets: 3 per most recent role; 2 per remaining roles
-   - Each bullet: one line, under 130 characters
-   - Skills: 3–4 groups, max 4 items per group — use inline text not tags
-   - Education: degree + school + year only, no notes
-   - Projects: omit unless directly matching a core JD requirement; if included, max 1, one sentence
+3. LENGTH: Target 1 page for industry/private-sector roles; 1–2 pages for government, research, or scientific roles (NOAA, EPA, USGS, national labs, universities). Use judgment based on the job description.
+   - Profile/summary: 2–3 sentences
+   - Roles: include all directly relevant roles (up to 5); omit unrelated early-career positions
+   - Bullets: 3–4 per role — more for recent/highly relevant roles
+   - Each bullet: one line, under 140 characters
+   - Skills: 3–5 groups, up to 6 items per group — use inline text not tags
+   - Education: degree + school + year; add dissertation title or relevant coursework if space allows for research roles
+   - Projects: include up to 2 if directly relevant to the JD
+   - Publications: include a "SELECTED PUBLICATIONS" section (up to 3 entries) when the resume mentions peer-reviewed work and the role is research-oriented
 4. BULLETS: Each bullet must name (1) a strong action verb, (2) a specific tool/method/standard from the original resume, and (3) the actual scope or outcome as described in the original. Only include a number if the base resume states one. If no metric exists, describe the scope honestly (e.g. "institution-wide", "multi-site", "cross-functional") without fabricating percentages or impact claims.
    Formula: [Verb] + [specific method/tool from resume] + [actual scope] + [real outcome if stated]
    Good (metric exists in resume): "Reduced manual reconciliation time by 40% by automating SQL-based ETL workflows across campus financial systems"
@@ -288,6 +289,7 @@ RULES:
     }
   ],
   "projects": [],
+  "publications": [],
   "skills": {
     "Programming & Data": ["Python", "R", "SQL", "Power BI"],
     "Spatial & Modeling": ["GIS", "Scenario Modeling", "Time-Series Analysis"],
@@ -398,7 +400,7 @@ async def tailor_resume(
     last_err: Exception = RuntimeError("Unknown error")
     for try_model in models_to_try:
         try:
-            raw = await _call_provider(resolved_provider, try_model, TAILOR_RESUME_SYSTEM, user_msg, resolved_key, max_tokens=3500)
+            raw = await _call_provider(resolved_provider, try_model, TAILOR_RESUME_SYSTEM, user_msg, resolved_key, max_tokens=4500)
             stripped = _strip_json(raw)
             if not stripped or not stripped.startswith("{"):
                 raise RuntimeError(

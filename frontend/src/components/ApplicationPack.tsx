@@ -12,6 +12,7 @@ interface ResumeData {
   education?: { degree: string; school: string; year: string; notes?: string }[];
   skills?: string[] | Record<string, string[]>;
   projects?: { name: string; description: string }[];
+  publications?: string[];
   ats_keywords?: string[];
 }
 
@@ -63,6 +64,10 @@ function buildResumeHTML(data: ResumeData, jobTitle: string, company: string): s
     `<div class="exp-block"><strong>${p.name}</strong><ul><li>${p.description}</li></ul></div>`
   ).join("");
 
+  const pubsHTML = (data.publications || []).filter(Boolean).map(p =>
+    `<div class="pub-row">${p}</div>`
+  ).join("");
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -88,6 +93,7 @@ function buildResumeHTML(data: ResumeData, jobTitle: string, company: string): s
   .edu-row { font-size: 10px; margin-bottom: 1px; }
   .skill-line { font-size: 10px; margin-bottom: 1px; }
   .skill-line strong { color: #111; }
+  .pub-row { font-size: 10px; margin-bottom: 2px; color: #222; }
   @media print {
     body { padding: 0; font-size: 10px; }
     @page { margin: 0.35in 0.4in; size: letter; }
@@ -101,6 +107,7 @@ function buildResumeHTML(data: ResumeData, jobTitle: string, company: string): s
   ${data.core_expertise ? sec("CORE EXPERTISE", `<div class="expertise">${data.core_expertise}</div>`) : ""}
   ${expHTML ? sec("PROFESSIONAL EXPERIENCE", expHTML) : ""}
   ${projectsHTML ? sec("SELECTED PROJECTS", projectsHTML) : ""}
+  ${pubsHTML ? sec("SELECTED PUBLICATIONS", pubsHTML) : ""}
   ${skillsHTML ? sec("TECHNICAL SKILLS", skillsHTML) : ""}
   ${eduHTML ? sec("EDUCATION", eduHTML) : ""}
 </body>
@@ -280,6 +287,13 @@ function ResumePreview({ data, fallback }: { data: ResumeData; fallback: string 
               <li style={{ fontSize: 11, lineHeight: 1.4 }}>{p.description}</li>
             </ul>
           </div>
+        ))}
+      </> : null}
+
+      {data.publications?.filter(Boolean).length ? <>
+        <SectionHead>SELECTED PUBLICATIONS</SectionHead>
+        {data.publications.filter(Boolean).map((p, i) => (
+          <div key={i} style={{ fontSize: 11, marginBottom: 3, lineHeight: 1.4, color: "#222" }}>{p}</div>
         ))}
       </> : null}
 
