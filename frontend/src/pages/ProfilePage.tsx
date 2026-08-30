@@ -695,7 +695,7 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
               style={{ flex: 1, minWidth: 260, padding: "6px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12 }}
             />
             <button
-              onClick={handleUrlExtract}
+              onClick={() => handleUrlExtract()}
               disabled={extractingUrl || !urlInput.trim()}
               style={{ ...primaryBtn, background: "#0f766e", fontSize: 12, opacity: extractingUrl || !urlInput.trim() ? 0.6 : 1 }}
             >
