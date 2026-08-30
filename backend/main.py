@@ -1482,11 +1482,10 @@ Rules:
         raise HTTPException(status_code=502, detail=f"AI provider error: {e}")
 
     try:
-        start = raw.index("{")
-        end = raw.rindex("}") + 1
-        parsed = _j.loads(raw[start:end])
+        from .ai import _strip_json as _sj
+        parsed = _j.loads(_sj(raw))
     except Exception:
-        raise HTTPException(status_code=500, detail="AI returned invalid JSON. Try again.")
+        raise HTTPException(status_code=422, detail="AI returned invalid JSON — try again or switch AI provider.")
 
     row = ProjectRow(
         id=str(_u.uuid4()), user_id=user_id,
@@ -1533,13 +1532,16 @@ async def extract_project_from_url(
         owner, repo = github_repo_match.group(1), github_repo_match.group(2).rstrip("/")
         repo_name_fallback = repo
         gh_headers = {"Accept": "application/vnd.github.v3+json", "User-Agent": "OfferLoops/1.0"}
-        async with httpx.AsyncClient(timeout=15) as client:
-            meta_r = await client.get(f"https://api.github.com/repos/{owner}/{repo}", headers=gh_headers)
-            readme_r = await client.get(f"https://api.github.com/repos/{owner}/{repo}/readme", headers=gh_headers)
-            lang_r = await client.get(f"https://api.github.com/repos/{owner}/{repo}/languages", headers=gh_headers)
+        try:
+            async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+                meta_r = await client.get(f"https://api.github.com/repos/{owner}/{repo}", headers=gh_headers)
+                readme_r = await client.get(f"https://api.github.com/repos/{owner}/{repo}/readme", headers=gh_headers)
+                lang_r = await client.get(f"https://api.github.com/repos/{owner}/{repo}/languages", headers=gh_headers)
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Could not reach GitHub API: {e}")
 
         if meta_r.status_code != 200:
-            raise HTTPException(status_code=422, detail=f"GitHub repo not found or private: {owner}/{repo}")
+            raise HTTPException(status_code=422, detail=f"GitHub repo not found or private ({meta_r.status_code}): {owner}/{repo}")
 
         meta = meta_r.json()
         parts = [f"Repository: {meta.get('name', repo)}", f"URL: {url}"]
@@ -1556,15 +1558,17 @@ async def extract_project_from_url(
         text = "\n".join(parts)
 
     elif github_user_match:
-        # User profile URL — fetch their public repos and return a list for the frontend to pick from
         username = github_user_match.group(1)
         gh_headers = {"Accept": "application/vnd.github.v3+json", "User-Agent": "OfferLoops/1.0"}
-        async with httpx.AsyncClient(timeout=15) as client:
-            repos_r = await client.get(
-                f"https://api.github.com/users/{username}/repos",
-                params={"sort": "updated", "per_page": 20},
-                headers=gh_headers,
-            )
+        try:
+            async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+                repos_r = await client.get(
+                    f"https://api.github.com/users/{username}/repos",
+                    params={"sort": "updated", "per_page": 20},
+                    headers=gh_headers,
+                )
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Could not reach GitHub API: {e}")
         if repos_r.status_code != 200:
             raise HTTPException(status_code=422, detail=f"GitHub user not found: {username}")
         repos = repos_r.json()
@@ -1574,7 +1578,6 @@ async def extract_project_from_url(
             {"name": r["name"], "url": r["html_url"], "description": r.get("description") or ""}
             for r in repos if not r.get("fork")
         ]
-        # Return repo list for the frontend to display — not a project yet
         return {"type": "repo_list", "username": username, "repos": repo_list}
 
     else:
@@ -1619,11 +1622,10 @@ Rules:
         raise HTTPException(status_code=502, detail=f"AI provider error: {e}")
 
     try:
-        start = raw.index("{")
-        end = raw.rindex("}") + 1
-        parsed = _j.loads(raw[start:end])
+        from .ai import _strip_json as _sj
+        parsed = _j.loads(_sj(raw))
     except Exception:
-        raise HTTPException(status_code=422, detail="AI returned invalid JSON — try again or use a different AI provider.")
+        raise HTTPException(status_code=422, detail="AI returned invalid JSON — try again or switch AI provider.")
 
     row = ProjectRow(
         id=str(_u.uuid4()), user_id=user_id,
