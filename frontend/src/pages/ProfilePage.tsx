@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { disconnectGmail, fetchGmailStatus, getToken, startGmailAuth, syncGmail, fetchProjects, createProject, updateProject, deleteProject, uploadProjectDoc, extractProjectFromUrl, suggestProjectOutcome, type Project } from "../api";
+import { disconnectGmail, fetchGmailStatus, getToken, startGmailAuth, syncGmail, fetchProjects, createProject, updateProject, deleteProject, uploadProjectDoc, extractProjectFromUrl, suggestProjectOutcome, type Project, type ExtractUrlResult } from "../api";
 import StoryBankPage from "./StoryBankPage";
 import type { GmailStatus } from "../types";
 
@@ -98,6 +98,7 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
   const [urlInput, setUrlInput] = useState("");
   const [extractingUrl, setExtractingUrl] = useState(false);
   const [urlError, setUrlError] = useState("");
+  const [repoList, setRepoList] = useState<{ name: string; url: string; description: string }[] | null>(null);
   const projectFileRef = useRef<HTMLInputElement>(null);
   const projectNameRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<"profile" | "stories">("profile");
@@ -310,16 +311,22 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
     }
   };
 
-  const handleUrlExtract = async () => {
-    const trimmed = urlInput.trim();
+  const handleUrlExtract = async (overrideUrl?: string) => {
+    const trimmed = (overrideUrl ?? urlInput).trim();
     if (!trimmed) return;
     setExtractingUrl(true);
     setUrlError("");
+    setRepoList(null);
     try {
-      const project = await extractProjectFromUrl(trimmed, aiProvider, aiKey || undefined);
-      setProjects(ps => [project, ...ps]);
-      setUrlInput("");
-      flash(`"${project.name}" extracted and added.`);
+      const result: ExtractUrlResult = await extractProjectFromUrl(trimmed, aiProvider, aiKey || undefined);
+      if ("type" in result && result.type === "repo_list") {
+        setRepoList(result.repos);
+      } else {
+        const project = result as Project;
+        setProjects(ps => [project, ...ps]);
+        setUrlInput("");
+        flash(`"${project.name}" extracted and added.`);
+      }
     } catch (err: unknown) {
       setUrlError(err instanceof Error ? err.message : "Extraction failed");
     } finally {
@@ -698,6 +705,25 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
           {urlError && (
             <div style={{ marginTop: 10, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 12px", fontSize: 12, color: "#dc2626" }}>
               ⚠ {urlError}
+            </div>
+          )}
+          {repoList && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>
+                Select a repository to extract:
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 240, overflowY: "auto" }}>
+                {repoList.map(r => (
+                  <button
+                    key={r.url}
+                    onClick={() => { setRepoList(null); handleUrlExtract(r.url); }}
+                    style={{ textAlign: "left", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 6, padding: "7px 12px", cursor: "pointer", fontSize: 12 }}
+                  >
+                    <span style={{ fontWeight: 600, color: "#1e293b" }}>{r.name}</span>
+                    {r.description && <span style={{ color: "#64748b", marginLeft: 8 }}>{r.description}</span>}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>

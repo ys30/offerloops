@@ -1525,10 +1525,13 @@ async def extract_project_from_url(
         raise HTTPException(status_code=422, detail="URL is required.")
 
     text = ""
-    github_match = re.match(r"https?://github\.com/([^/?\s#]+)/([^/?\s#]+)", url)
+    repo_name_fallback = "Project"
+    github_repo_match = re.match(r"https?://github\.com/([^/?\s#]+)/([^/?\s#]+)", url)
+    github_user_match = re.match(r"https?://github\.com/([^/?\s#]+)/?$", url)
 
-    if github_match:
-        owner, repo = github_match.group(1), github_match.group(2).rstrip("/")
+    if github_repo_match:
+        owner, repo = github_repo_match.group(1), github_repo_match.group(2).rstrip("/")
+        repo_name_fallback = repo
         gh_headers = {"Accept": "application/vnd.github.v3+json", "User-Agent": "OfferLoops/1.0"}
         async with httpx.AsyncClient(timeout=15) as client:
             meta_r = await client.get(f"https://api.github.com/repos/{owner}/{repo}", headers=gh_headers)
@@ -1539,10 +1542,7 @@ async def extract_project_from_url(
             raise HTTPException(status_code=422, detail=f"GitHub repo not found or private: {owner}/{repo}")
 
         meta = meta_r.json()
-        parts = [
-            f"Repository: {meta.get('name', repo)}",
-            f"URL: {url}",
-        ]
+        parts = [f"Repository: {meta.get('name', repo)}", f"URL: {url}"]
         if meta.get("description"):
             parts.append(f"Description: {meta['description']}")
         if meta.get("topics"):
@@ -1554,6 +1554,29 @@ async def extract_project_from_url(
             readme_text = base64.b64decode(readme_b64).decode("utf-8", errors="replace")
             parts.append(f"\nREADME:\n{readme_text[:5000]}")
         text = "\n".join(parts)
+
+    elif github_user_match:
+        # User profile URL — fetch their public repos and return a list for the frontend to pick from
+        username = github_user_match.group(1)
+        gh_headers = {"Accept": "application/vnd.github.v3+json", "User-Agent": "OfferLoops/1.0"}
+        async with httpx.AsyncClient(timeout=15) as client:
+            repos_r = await client.get(
+                f"https://api.github.com/users/{username}/repos",
+                params={"sort": "updated", "per_page": 20},
+                headers=gh_headers,
+            )
+        if repos_r.status_code != 200:
+            raise HTTPException(status_code=422, detail=f"GitHub user not found: {username}")
+        repos = repos_r.json()
+        if not repos:
+            raise HTTPException(status_code=422, detail=f"No public repositories found for {username}.")
+        repo_list = [
+            {"name": r["name"], "url": r["html_url"], "description": r.get("description") or ""}
+            for r in repos if not r.get("fork")
+        ]
+        # Return repo list for the frontend to display — not a project yet
+        return {"type": "repo_list", "username": username, "repos": repo_list}
+
     else:
         try:
             async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
@@ -1600,11 +1623,11 @@ Rules:
         end = raw.rindex("}") + 1
         parsed = _j.loads(raw[start:end])
     except Exception:
-        raise HTTPException(status_code=500, detail="AI returned invalid JSON. Try again.")
+        raise HTTPException(status_code=422, detail="AI returned invalid JSON — try again or use a different AI provider.")
 
     row = ProjectRow(
         id=str(_u.uuid4()), user_id=user_id,
-        name=parsed.get("name", repo if github_match else "Project"),
+        name=parsed.get("name", repo_name_fallback),
         description=parsed.get("description"),
         role=parsed.get("role"),
         tech_stack=_j.dumps(parsed.get("tech_stack", [])),

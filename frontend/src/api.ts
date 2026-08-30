@@ -466,11 +466,15 @@ export async function uploadProjectDoc(
   return res.json();
 }
 
+export type ExtractUrlResult =
+  | { type: "repo_list"; username: string; repos: { name: string; url: string; description: string }[] }
+  | Project;
+
 export async function extractProjectFromUrl(
   url: string,
   provider = "nvidia",
   apiKey?: string,
-): Promise<Project> {
+): Promise<ExtractUrlResult> {
   const res = await fetch(`${BASE}/projects/extract-url`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
