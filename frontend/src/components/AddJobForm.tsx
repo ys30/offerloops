@@ -18,6 +18,7 @@ export default function AddJobForm({ onCreated, onClose }: Props) {
     salary_min: "",
     salary_max: "",
     tags: "",
+    posted_date: "",
     deadline: "",
   });
   const [saving, setSaving] = useState(false);
@@ -105,6 +106,7 @@ export default function AddJobForm({ onCreated, onClose }: Props) {
         salary_min: form.salary_min ? Number(form.salary_min) : undefined,
         salary_max: form.salary_max ? Number(form.salary_max) : undefined,
         tags: form.tags ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
+        posted_date: form.posted_date || undefined,
         deadline: form.deadline || undefined,
       });
       onCreated();
@@ -242,9 +244,14 @@ export default function AddJobForm({ onCreated, onClose }: Props) {
             <input style={inp} type="url" value={form.apply_url} onChange={e => set("apply_url", e.target.value)} placeholder="https://..." />
           </Field>
 
-          <Field label="Deadline">
-            <input style={inp} type="date" value={form.deadline} onChange={e => set("deadline", e.target.value)} />
-          </Field>
+          <Row>
+            <Field label="Date Posted">
+              <input style={inp} type="date" value={form.posted_date} onChange={e => set("posted_date", e.target.value)} />
+            </Field>
+            <Field label="Deadline">
+              <input style={inp} type="date" value={form.deadline} onChange={e => set("deadline", e.target.value)} />
+            </Field>
+          </Row>
 
           <Field label="Tags (comma-separated)">
             <input style={inp} value={form.tags} onChange={e => set("tags", e.target.value)} placeholder="python, GIS, water quality" />

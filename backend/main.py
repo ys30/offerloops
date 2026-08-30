@@ -275,13 +275,16 @@ def list_jobs(
         cutoff = datetime.utcnow() - timedelta(days=days)
         query = query.filter(or_(JobRow.posted_date >= cutoff, JobRow.created_at >= cutoff))
 
+    from sqlalchemy import func as _func
+    # Use COALESCE so jobs without a posted_date sort by created_at instead of sinking to last page
+    effective_date = _func.coalesce(JobRow.posted_date, JobRow.created_at)
     total = query.count()
     if sort == "score":
-        rows = query.order_by(JobRow.ai_score.desc().nulls_last(), JobRow.posted_date.desc().nulls_last(), JobRow.created_at.desc()).offset(offset).limit(limit).all()
+        rows = query.order_by(JobRow.ai_score.desc().nulls_last(), effective_date.desc()).offset(offset).limit(limit).all()
     elif sort == "score_date":
-        rows = query.order_by(JobRow.ai_score.desc().nulls_last(), JobRow.posted_date.desc().nulls_last(), JobRow.created_at.desc()).offset(offset).limit(limit).all()
+        rows = query.order_by(JobRow.ai_score.desc().nulls_last(), effective_date.desc()).offset(offset).limit(limit).all()
     else:
-        rows = query.order_by(JobRow.posted_date.desc().nulls_last(), JobRow.created_at.desc()).offset(offset).limit(limit).all()
+        rows = query.order_by(effective_date.desc()).offset(offset).limit(limit).all()
     jobs = [row_to_job(r) for r in rows]
     return JSONResponse(
         content=[j.model_dump(mode="json") for j in jobs],
