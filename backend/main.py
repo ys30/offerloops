@@ -1481,11 +1481,11 @@ Rules:
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI provider error: {e}")
 
+    from .ai import _strip_json as _sj
     try:
-        from .ai import _strip_json as _sj
         parsed = _j.loads(_sj(raw))
     except Exception:
-        raise HTTPException(status_code=422, detail="AI returned invalid JSON — try again or switch AI provider.")
+        raise HTTPException(status_code=422, detail=f"AI returned invalid JSON. Raw response (first 200 chars): {raw[:200]!r}")
 
     row = ProjectRow(
         id=str(_u.uuid4()), user_id=user_id,
@@ -1513,9 +1513,13 @@ async def extract_project_from_url(
     import httpx
     import json as _j
     import uuid as _u
-    from .ai import call_ai
+    from .ai import call_ai, _strip_json as _sj
 
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=422, detail="Invalid request body — expected JSON.")
+
     url = (body.get("url") or "").strip()
     provider = body.get("provider", "nvidia")
     api_key_val = body.get("api_key") or None
@@ -1622,24 +1626,28 @@ Rules:
         raise HTTPException(status_code=502, detail=f"AI provider error: {e}")
 
     try:
-        from .ai import _strip_json as _sj
         parsed = _j.loads(_sj(raw))
     except Exception:
-        raise HTTPException(status_code=422, detail="AI returned invalid JSON — try again or switch AI provider.")
+        raise HTTPException(status_code=422, detail=f"AI returned invalid JSON. Raw response (first 200 chars): {raw[:200]!r}")
 
-    row = ProjectRow(
-        id=str(_u.uuid4()), user_id=user_id,
-        name=parsed.get("name", repo_name_fallback),
-        description=parsed.get("description"),
-        role=parsed.get("role"),
-        tech_stack=_j.dumps(parsed.get("tech_stack", [])),
-        outcome=parsed.get("outcome"),
-        url=parsed.get("url") or url or None,
-        dates=parsed.get("dates") or None,
-    )
-    db.add(row)
-    db.commit()
-    return _project_out(row)
+    try:
+        row = ProjectRow(
+            id=str(_u.uuid4()), user_id=user_id,
+            name=parsed.get("name", repo_name_fallback),
+            description=parsed.get("description"),
+            role=parsed.get("role"),
+            tech_stack=_j.dumps(parsed.get("tech_stack", [])),
+            outcome=parsed.get("outcome"),
+            url=parsed.get("url") or url or None,
+            dates=parsed.get("dates") or None,
+        )
+        db.add(row)
+        db.commit()
+        return _project_out(row)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Failed to save project: {type(e).__name__}: {e}")
 
 
 # ── Ingestion ────────────────────────────────────────────────────────
