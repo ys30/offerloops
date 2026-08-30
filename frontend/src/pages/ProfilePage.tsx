@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { disconnectGmail, fetchGmailStatus, getToken, startGmailAuth, syncGmail, fetchProjects, createProject, updateProject, deleteProject, uploadProjectDoc, suggestProjectOutcome, type Project } from "../api";
+import { disconnectGmail, fetchGmailStatus, getToken, startGmailAuth, syncGmail, fetchProjects, createProject, updateProject, deleteProject, uploadProjectDoc, extractProjectFromUrl, suggestProjectOutcome, type Project } from "../api";
 import StoryBankPage from "./StoryBankPage";
 import type { GmailStatus } from "../types";
 
@@ -95,6 +95,9 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
   const [projectFormError, setProjectFormError] = useState("");
   const [suggestingOutcome, setSuggestingOutcome] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [urlInput, setUrlInput] = useState("");
+  const [extractingUrl, setExtractingUrl] = useState(false);
+  const [urlError, setUrlError] = useState("");
   const projectFileRef = useRef<HTMLInputElement>(null);
   const projectNameRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<"profile" | "stories">("profile");
@@ -304,6 +307,23 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
     } finally {
       setUploadingDoc(false);
       if (projectFileRef.current) projectFileRef.current.value = "";
+    }
+  };
+
+  const handleUrlExtract = async () => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+    setExtractingUrl(true);
+    setUrlError("");
+    try {
+      const project = await extractProjectFromUrl(trimmed, aiProvider, aiKey || undefined);
+      setProjects(ps => [project, ...ps]);
+      setUrlInput("");
+      flash(`"${project.name}" extracted and added.`);
+    } catch (err: unknown) {
+      setUrlError(err instanceof Error ? err.message : "Extraction failed");
+    } finally {
+      setExtractingUrl(false);
     }
   };
 
@@ -646,6 +666,38 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
                   Enter your API key in the field above, or configure one on the server.
                 </div>
               ) : null}
+            </div>
+          )}
+        </div>
+
+        {/* URL / GitHub extract zone */}
+        <div style={{ background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: 8, padding: "14px 16px", marginBottom: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>
+            🔗 Import from GitHub or URL
+          </div>
+          <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 10px", lineHeight: 1.6 }}>
+            Paste a GitHub repo URL or any project/portfolio page — AI will read the README and extract the project automatically.
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <input
+              type="url"
+              value={urlInput}
+              onChange={e => setUrlInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleUrlExtract()}
+              placeholder="https://github.com/username/repo"
+              style={{ flex: 1, minWidth: 260, padding: "6px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12 }}
+            />
+            <button
+              onClick={handleUrlExtract}
+              disabled={extractingUrl || !urlInput.trim()}
+              style={{ ...primaryBtn, background: "#0f766e", fontSize: 12, opacity: extractingUrl || !urlInput.trim() ? 0.6 : 1 }}
+            >
+              {extractingUrl ? "Extracting…" : "✨ Extract"}
+            </button>
+          </div>
+          {urlError && (
+            <div style={{ marginTop: 10, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 12px", fontSize: 12, color: "#dc2626" }}>
+              ⚠ {urlError}
             </div>
           )}
         </div>

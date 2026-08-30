@@ -466,6 +466,20 @@ export async function uploadProjectDoc(
   return res.json();
 }
 
+export async function extractProjectFromUrl(
+  url: string,
+  provider = "nvidia",
+  apiKey?: string,
+): Promise<Project> {
+  const res = await fetch(`${BASE}/projects/extract-url`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ url, provider, api_key: apiKey }),
+  });
+  if (!res.ok) throw new Error(await extractDetail(res));
+  return res.json();
+}
+
 // ── STAR Story Bank ────────────────────────────────────────────────
 
 export interface Story {

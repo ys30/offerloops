@@ -1503,6 +1503,120 @@ Rules:
     return _project_out(row)
 
 
+@app.post("/api/projects/extract-url", tags=["projects"])
+async def extract_project_from_url(
+    request: Request,
+    user_id: str = Depends(_require_user),
+    db: Session = Depends(get_db),
+):
+    """Extract project info from a GitHub repo URL or any project/portfolio URL."""
+    import base64
+    import httpx
+    import json as _j
+    import uuid as _u
+    from .ai import call_ai
+
+    body = await request.json()
+    url = (body.get("url") or "").strip()
+    provider = body.get("provider", "nvidia")
+    api_key_val = body.get("api_key") or None
+
+    if not url:
+        raise HTTPException(status_code=422, detail="URL is required.")
+
+    text = ""
+    github_match = re.match(r"https?://github\.com/([^/?\s#]+)/([^/?\s#]+)", url)
+
+    if github_match:
+        owner, repo = github_match.group(1), github_match.group(2).rstrip("/")
+        gh_headers = {"Accept": "application/vnd.github.v3+json", "User-Agent": "OfferLoops/1.0"}
+        async with httpx.AsyncClient(timeout=15) as client:
+            meta_r = await client.get(f"https://api.github.com/repos/{owner}/{repo}", headers=gh_headers)
+            readme_r = await client.get(f"https://api.github.com/repos/{owner}/{repo}/readme", headers=gh_headers)
+            lang_r = await client.get(f"https://api.github.com/repos/{owner}/{repo}/languages", headers=gh_headers)
+
+        if meta_r.status_code != 200:
+            raise HTTPException(status_code=422, detail=f"GitHub repo not found or private: {owner}/{repo}")
+
+        meta = meta_r.json()
+        parts = [
+            f"Repository: {meta.get('name', repo)}",
+            f"URL: {url}",
+        ]
+        if meta.get("description"):
+            parts.append(f"Description: {meta['description']}")
+        if meta.get("topics"):
+            parts.append(f"Topics: {', '.join(meta['topics'])}")
+        if lang_r.status_code == 200:
+            parts.append(f"Languages: {', '.join(lang_r.json().keys())}")
+        if readme_r.status_code == 200:
+            readme_b64 = readme_r.json().get("content", "")
+            readme_text = base64.b64decode(readme_b64).decode("utf-8", errors="replace")
+            parts.append(f"\nREADME:\n{readme_text[:5000]}")
+        text = "\n".join(parts)
+    else:
+        try:
+            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+                r = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                r.raise_for_status()
+            raw_html = r.text
+            text = re.sub(r"<[^>]+>", " ", raw_html)
+            text = re.sub(r"\s+", " ", text).strip()[:6000]
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Could not fetch URL: {e}")
+
+    if not text or len(text) < 30:
+        raise HTTPException(status_code=422, detail="Could not extract readable content from the URL.")
+
+    prompt = f"""You are a senior technical writer who crafts project descriptions for top-tier research labs and tech companies. Your job is to make this project sound significant, credible, and compelling.
+
+Source content (from URL: {url}):
+{text[:6000]}
+
+Return ONLY valid JSON (no markdown) with these keys:
+{{
+  "name": "concise project title (5 words max)",
+  "dates": "time period e.g. 2022–2024 or empty string",
+  "role": "your title on this project + what you personally owned",
+  "description": "2-3 sentences. Arc: (1) what was built and for whom, (2) what you specifically architected — name concrete components, (3) the outcome or capability created. Strong specific verbs. Do NOT start with 'I'.",
+  "tech_stack": ["languages, frameworks, libraries, platforms — no generic words"],
+  "outcome": "2 sentences. Sentence 1: headline result with a number or scale if stated. Sentence 2: what capability or visibility that unlocked. Use ~ for estimates only if justified by context.",
+  "url": "{url}"
+}}
+
+Rules:
+- Only use facts present in the source; use ~ for reasonable inferences
+- Cut adjectives that don't carry information (innovative, powerful, robust)"""
+
+    try:
+        raw = await call_ai(prompt, provider=provider, api_key=api_key_val)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AI provider error: {e}")
+
+    try:
+        start = raw.index("{")
+        end = raw.rindex("}") + 1
+        parsed = _j.loads(raw[start:end])
+    except Exception:
+        raise HTTPException(status_code=500, detail="AI returned invalid JSON. Try again.")
+
+    row = ProjectRow(
+        id=str(_u.uuid4()), user_id=user_id,
+        name=parsed.get("name", repo if github_match else "Project"),
+        description=parsed.get("description"),
+        role=parsed.get("role"),
+        tech_stack=_j.dumps(parsed.get("tech_stack", [])),
+        outcome=parsed.get("outcome"),
+        url=parsed.get("url") or url or None,
+        dates=parsed.get("dates") or None,
+    )
+    db.add(row)
+    db.commit()
+    return _project_out(row)
+
+
 # ── Ingestion ────────────────────────────────────────────────────────
 
 
