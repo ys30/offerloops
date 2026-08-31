@@ -1512,128 +1512,96 @@ async def extract_project_from_url(
     db: Session = Depends(get_db),
 ):
     """Extract project info from a GitHub repo URL or any project/portfolio URL."""
-    import base64
-    import httpx
-    import json as _j
-    import uuid as _u
-    from .ai import call_ai, _strip_json as _sj
-
+    # Single outer catch-all so any unhandled exception surfaces as a readable error
     try:
+        import re as _re
+        import base64 as _b64
+        import httpx as _httpx
+        import json as _j
+        import uuid as _u
+        from .ai import call_ai, _strip_json as _sj
+
         body = await request.json()
-    except Exception:
-        raise HTTPException(status_code=422, detail="Invalid request body — expected JSON.")
+        url = (body.get("url") or "").strip()
+        provider = body.get("provider", "nvidia")
+        api_key_val = body.get("api_key") or None
 
-    url = (body.get("url") or "").strip()
-    provider = body.get("provider", "nvidia")
-    api_key_val = body.get("api_key") or None
+        if not url:
+            raise HTTPException(status_code=422, detail="URL is required.")
 
-    if not url:
-        raise HTTPException(status_code=422, detail="URL is required.")
-
-    text = ""
-    repo_name_fallback = "Project"
-    github_repo_match = re.match(r"https?://github\.com/([^/?\s#]+)/([^/?\s#]+)", url)
-    github_user_match = re.match(r"https?://github\.com/([^/?\s#]+)/?$", url)
-
-    if github_repo_match:
-        owner, repo = github_repo_match.group(1), github_repo_match.group(2).rstrip("/")
-        repo_name_fallback = repo
+        text = ""
+        repo_name_fallback = "Project"
         gh_headers = {"Accept": "application/vnd.github.v3+json", "User-Agent": "OfferLoops/1.0"}
-        try:
-            async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
-                meta_r = await client.get(f"https://api.github.com/repos/{owner}/{repo}", headers=gh_headers)
+        github_repo_match = _re.match(r"https?://github\.com/([^/?\s#]+)/([^/?\s#]+)", url)
+        github_user_match = _re.match(r"https?://github\.com/([^/?\s#]+)/?$", url)
+
+        if github_repo_match:
+            owner, repo = github_repo_match.group(1), github_repo_match.group(2).rstrip("/")
+            repo_name_fallback = repo
+            async with _httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+                meta_r  = await client.get(f"https://api.github.com/repos/{owner}/{repo}", headers=gh_headers)
                 readme_r = await client.get(f"https://api.github.com/repos/{owner}/{repo}/readme", headers=gh_headers)
-                lang_r = await client.get(f"https://api.github.com/repos/{owner}/{repo}/languages", headers=gh_headers)
-        except Exception as e:
-            raise HTTPException(status_code=422, detail=f"Could not reach GitHub API: {e}")
+                lang_r  = await client.get(f"https://api.github.com/repos/{owner}/{repo}/languages", headers=gh_headers)
 
-        if meta_r.status_code != 200:
-            raise HTTPException(status_code=422, detail=f"GitHub repo not found or private ({meta_r.status_code}): {owner}/{repo}")
+            if meta_r.status_code != 200:
+                raise HTTPException(status_code=422, detail=f"GitHub repo not found or private ({meta_r.status_code}): {owner}/{repo}")
 
-        meta = meta_r.json()
-        parts = [f"Repository: {meta.get('name', repo)}", f"URL: {url}"]
-        if meta.get("description"):
-            parts.append(f"Description: {meta['description']}")
-        if meta.get("topics"):
-            parts.append(f"Topics: {', '.join(meta['topics'])}")
-        if lang_r.status_code == 200:
-            parts.append(f"Languages: {', '.join(lang_r.json().keys())}")
-        if readme_r.status_code == 200:
-            readme_b64 = readme_r.json().get("content", "")
-            readme_text = base64.b64decode(readme_b64).decode("utf-8", errors="replace")
-            parts.append(f"\nREADME:\n{readme_text[:5000]}")
-        text = "\n".join(parts)
+            meta = meta_r.json()
+            parts = [f"Repository: {meta.get('name', repo)}", f"URL: {url}"]
+            if meta.get("description"):
+                parts.append(f"Description: {meta['description']}")
+            if meta.get("topics"):
+                parts.append(f"Topics: {', '.join(meta['topics'])}")
+            if lang_r.status_code == 200:
+                parts.append(f"Languages: {', '.join(lang_r.json().keys())}")
+            if readme_r.status_code == 200:
+                readme_b64 = readme_r.json().get("content", "")
+                readme_text = _b64.b64decode(readme_b64).decode("utf-8", errors="replace")
+                parts.append(f"\nREADME:\n{readme_text[:5000]}")
+            text = "\n".join(parts)
 
-    elif github_user_match:
-        username = github_user_match.group(1)
-        gh_headers = {"Accept": "application/vnd.github.v3+json", "User-Agent": "OfferLoops/1.0"}
-        try:
-            async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        elif github_user_match:
+            username = github_user_match.group(1)
+            async with _httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
                 repos_r = await client.get(
                     f"https://api.github.com/users/{username}/repos",
                     params={"sort": "updated", "per_page": 20},
                     headers=gh_headers,
                 )
-        except Exception as e:
-            raise HTTPException(status_code=422, detail=f"Could not reach GitHub API: {e}")
-        if repos_r.status_code != 200:
-            raise HTTPException(status_code=422, detail=f"GitHub user not found: {username}")
-        repos = repos_r.json()
-        if not repos:
-            raise HTTPException(status_code=422, detail=f"No public repositories found for {username}.")
-        repo_list = [
-            {"name": r["name"], "url": r["html_url"], "description": r.get("description") or ""}
-            for r in repos if not r.get("fork")
-        ]
-        return {"type": "repo_list", "username": username, "repos": repo_list}
+            if repos_r.status_code != 200:
+                raise HTTPException(status_code=422, detail=f"GitHub user not found: {username}")
+            repos = repos_r.json()
+            if not repos:
+                raise HTTPException(status_code=422, detail=f"No public repositories found for {username}.")
+            repo_list = [
+                {"name": r["name"], "url": r["html_url"], "description": r.get("description") or ""}
+                for r in repos if not r.get("fork")
+            ]
+            return {"type": "repo_list", "username": username, "repos": repo_list}
 
-    else:
-        try:
-            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+        else:
+            async with _httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
                 r = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
                 r.raise_for_status()
-            raw_html = r.text
-            text = re.sub(r"<[^>]+>", " ", raw_html)
-            text = re.sub(r"\s+", " ", text).strip()[:6000]
-        except Exception as e:
-            raise HTTPException(status_code=422, detail=f"Could not fetch URL: {e}")
+            text = _re.sub(r"\s+", " ", _re.sub(r"<[^>]+>", " ", r.text)).strip()[:6000]
 
-    if not text or len(text) < 30:
-        raise HTTPException(status_code=422, detail="Could not extract readable content from the URL.")
+        if not text or len(text) < 30:
+            raise HTTPException(status_code=422, detail="Could not extract readable content from the URL.")
 
-    prompt = f"""You are a senior technical writer who crafts project descriptions for top-tier research labs and tech companies. Your job is to make this project sound significant, credible, and compelling.
+        safe_url = url.replace("{", "{{").replace("}", "}}")
+        prompt = (
+            "You are a senior technical writer. Extract project info and return ONLY valid JSON.\n\n"
+            f"Source (URL: {safe_url}):\n{text[:6000]}\n\n"
+            'Return JSON with keys: "name" (5 words max), "dates" (e.g. "2022-2024" or ""), '
+            '"role" (your title + what you owned), "description" (2-3 sentences: what/for whom, '
+            'what you built, outcome — no filler), "tech_stack" (list of real tools/languages), '
+            f'"outcome" (2 sentences with numbers if available), "url" ("{safe_url}"). '
+            "No markdown, no explanation — only the JSON object."
+        )
 
-Source content (from URL: {url}):
-{text[:6000]}
-
-Return ONLY valid JSON (no markdown) with these keys:
-{{
-  "name": "concise project title (5 words max)",
-  "dates": "time period e.g. 2022–2024 or empty string",
-  "role": "your title on this project + what you personally owned",
-  "description": "2-3 sentences. Arc: (1) what was built and for whom, (2) what you specifically architected — name concrete components, (3) the outcome or capability created. Strong specific verbs. Do NOT start with 'I'.",
-  "tech_stack": ["languages, frameworks, libraries, platforms — no generic words"],
-  "outcome": "2 sentences. Sentence 1: headline result with a number or scale if stated. Sentence 2: what capability or visibility that unlocked. Use ~ for estimates only if justified by context.",
-  "url": "{url}"
-}}
-
-Rules:
-- Only use facts present in the source; use ~ for reasonable inferences
-- Cut adjectives that don't carry information (innovative, powerful, robust)"""
-
-    try:
         raw = await call_ai(prompt, provider=provider, api_key=api_key_val)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"AI provider error: {e}")
-
-    try:
         parsed = _j.loads(_sj(raw))
-    except Exception:
-        raise HTTPException(status_code=422, detail=f"AI returned invalid JSON. Raw response (first 200 chars): {raw[:200]!r}")
 
-    try:
         row = ProjectRow(
             id=str(_u.uuid4()), user_id=user_id,
             name=parsed.get("name", repo_name_fallback),
@@ -1641,16 +1609,17 @@ Rules:
             role=parsed.get("role"),
             tech_stack=_j.dumps(parsed.get("tech_stack", [])),
             outcome=parsed.get("outcome"),
-            url=parsed.get("url") or url or None,
+            url=url,
             dates=parsed.get("dates") or None,
         )
         db.add(row)
         db.commit()
         return _project_out(row)
+
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=f"Failed to save project: {type(e).__name__}: {e}")
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"[{type(exc).__name__}] {exc}")
 
 
 # ── Ingestion ────────────────────────────────────────────────────────
