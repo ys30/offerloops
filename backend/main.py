@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, case
 from sqlalchemy.orm import Session
 from pathlib import Path
 
@@ -278,13 +278,18 @@ def list_jobs(
     from sqlalchemy import func as _func
     # Use COALESCE so jobs without a posted_date sort by created_at instead of sinking to last page
     effective_date = _func.coalesce(JobRow.posted_date, JobRow.created_at)
+    # Deprioritize dismissed/closed jobs to the end of every sort mode
+    deprioritized = case(
+        (JobRow.status.in_(["not_interested", "closed"]), 1),
+        else_=0,
+    )
     total = query.count()
     if sort == "score":
-        rows = query.order_by(JobRow.ai_score.desc().nulls_last(), effective_date.desc()).offset(offset).limit(limit).all()
+        rows = query.order_by(deprioritized, JobRow.ai_score.desc().nulls_last(), effective_date.desc()).offset(offset).limit(limit).all()
     elif sort == "score_date":
-        rows = query.order_by(JobRow.ai_score.desc().nulls_last(), effective_date.desc()).offset(offset).limit(limit).all()
+        rows = query.order_by(deprioritized, JobRow.ai_score.desc().nulls_last(), effective_date.desc()).offset(offset).limit(limit).all()
     else:
-        rows = query.order_by(effective_date.desc()).offset(offset).limit(limit).all()
+        rows = query.order_by(deprioritized, effective_date.desc()).offset(offset).limit(limit).all()
     jobs = [row_to_job(r) for r in rows]
     return JSONResponse(
         content=[j.model_dump(mode="json") for j in jobs],
