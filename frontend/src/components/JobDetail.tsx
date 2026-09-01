@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { EmailEvent, Job } from "../types";
-import { analyzeJob, createStory, fetchEmailEvents, generateApplicationPack, getToken, linkStory, recommendStories, scoreStoriesAI, unlinkStory, updateJobStatus } from "../api";
+import { analyzeJob, createStory, fetchEmailEvents, generateApplicationPack, getToken, linkStory, recommendStories, refreshJobDescription, scoreStoriesAI, unlinkStory, updateJobStatus } from "../api";
 import type { Story } from "../api";
 import ApplicationPack from "./ApplicationPack";
 
@@ -56,6 +56,9 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
   );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [description, setDescription] = useState(job.description);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState("");
 
   // STAR stories — pool model with recommendations
   const [stories, setStories] = useState<Story[]>([]);
@@ -220,10 +223,36 @@ export default function JobDetail({ job, onBack, onDeleted }: Props) {
         )}
 
         <section style={{ marginTop: 24 }}>
-          <h3 style={{ fontSize: 15, color: "#1a202c", marginBottom: 8 }}>Description</h3>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <h3 style={{ margin: 0, fontSize: 15, color: "#1a202c" }}>Description</h3>
+            <button
+              onClick={async () => {
+                setRefreshing(true);
+                setRefreshError("");
+                try {
+                  const updated = await refreshJobDescription(job.id);
+                  setDescription(updated.description);
+                } catch (e: unknown) {
+                  setRefreshError(e instanceof Error ? e.message : "Refresh failed");
+                } finally {
+                  setRefreshing(false);
+                }
+              }}
+              disabled={refreshing}
+              title="Re-fetch full description from source"
+              style={{
+                fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 5,
+                border: "1px solid #e2e8f0", background: "#f8fafc", color: "#2563eb",
+                cursor: refreshing ? "not-allowed" : "pointer", opacity: refreshing ? 0.6 : 1,
+              }}
+            >
+              {refreshing ? "Fetching…" : "↻ Refresh"}
+            </button>
+            {refreshError && <span style={{ fontSize: 11, color: "#dc2626" }}>{refreshError}</span>}
+          </div>
           <div
             style={{ fontSize: 13, color: "#374151", lineHeight: 1.6, whiteSpace: "pre-wrap" }}
-            dangerouslySetInnerHTML={{ __html: job.description.replace(/<[^>]+>/g, " ").trim() }}
+            dangerouslySetInnerHTML={{ __html: description.replace(/<[^>]+>/g, " ").trim() }}
           />
         </section>
 

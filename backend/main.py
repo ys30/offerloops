@@ -793,6 +793,65 @@ def delete_job(job_id: str, user_id: str = Depends(_require_user), db: Session =
     db.commit()
 
 
+@app.post("/api/jobs/{job_id}/refresh-description", response_model=Job, tags=["jobs"])
+async def refresh_job_description(job_id: str, user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    """Re-fetch the full description from the job's source page and save it."""
+    row = db.get(JobRow, job_id)
+    if not row or (row.user_id is not None and row.user_id != user_id):
+        raise HTTPException(status_code=404, detail="Job not found")
+    if not row.apply_url:
+        raise HTTPException(status_code=422, detail="No source URL available for this job")
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True, headers=headers) as client:
+            resp = await client.get(row.apply_url)
+            if not resp.is_success:
+                raise HTTPException(status_code=502, detail=f"Source returned {resp.status_code}")
+            html = resp.text
+
+        description = ""
+        # Climatebase: extract from __NEXT_DATA__ JSON
+        if row.source == "climatebase":
+            import re as _re, json as _json
+            m = _re.search(r'<script id="__NEXT_DATA__"[^>]*>(.+?)</script>', html, _re.DOTALL)
+            if m:
+                try:
+                    data = _json.loads(m.group(1))
+                    detail = data.get("props", {}).get("pageProps", {}).get("data", {})
+                    description = detail.get("description") or detail.get("employer_short_description") or ""
+                except Exception:
+                    pass
+        # Generic fallback: strip HTML tags from raw page body
+        if not description:
+            import re as _re
+            # Try common description containers
+            for pattern in [
+                r'<div[^>]*class="[^"]*description[^"]*"[^>]*>(.*?)</div>',
+                r'<section[^>]*class="[^"]*description[^"]*"[^>]*>(.*?)</section>',
+            ]:
+                m = _re.search(pattern, html, _re.DOTALL | _re.IGNORECASE)
+                if m:
+                    description = _re.sub(r'<[^>]+>', ' ', m.group(1)).strip()
+                    break
+
+        if description:
+            row.description = description
+            row.updated_at = datetime.utcnow()
+            db.commit()
+        else:
+            raise HTTPException(status_code=422, detail="Could not extract description from source page")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Fetch failed: {e}")
+
+    return row_to_job(row)
+
+
 # ── Tracker ──────────────────────────────────────────────────────────
 
 

@@ -174,6 +174,12 @@ export async function deleteJob(id: string): Promise<void> {
   if (!res.ok) throw new Error(await res.text());
 }
 
+export async function refreshJobDescription(id: string): Promise<Job> {
+  const res = await fetch(`${BASE}/jobs/${id}/refresh-description`, { method: "POST", headers: authHeaders() });
+  if (!res.ok) throw new Error(await (res.json().then(b => b.detail).catch(() => `HTTP ${res.status}`)));
+  return res.json();
+}
+
 export async function updateJobStatus(
   id: string,
   status: string,
