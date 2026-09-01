@@ -241,7 +241,7 @@ RULES:
 2. EDUCATION: Copy EVERY degree from the "EDUCATION SECTION" block in reverse chronological order. Expand abbreviations (MAP → Master of Public Affairs (MAP)). Copy school names character-for-character. Never add placeholder text.
 3. LENGTH: Target 1 page for industry/private-sector roles; 1–2 pages for government, research, or scientific roles (NOAA, EPA, USGS, national labs, universities). Use judgment based on the job description.
    - Profile/summary: 2–3 sentences
-   - Roles: include all directly relevant roles (up to 5); omit unrelated early-career positions
+   - Roles: ALWAYS include the candidate's current or most recent role — minimum 1–2 bullets — even if not directly relevant to the JD. Frame transferable skills (analytical workflows, stakeholder communication, project management, data systems) in terms relevant to the target role. Then include other directly relevant roles (up to 5 total); omit only unrelated early-career positions (not the current role)
    - Bullets: 3–4 per role — more for recent/highly relevant roles
    - Each bullet: one line, under 140 characters
    - Skills: 3–5 groups, up to 6 items per group — use inline text not tags
@@ -417,24 +417,39 @@ async def tailor_resume(
 
 
 def _extract_cover_letter(raw: str) -> str:
-    """Strip model reasoning/planning that leaks before the actual letter."""
+    """Strip reasoning/planning preamble that leaks before the actual letter."""
+    # Strip <think> blocks first
+    raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
     lines = raw.strip().splitlines()
-    # Find the first line that looks like the start of a real letter paragraph
-    # (starts with "Dear", "My ", "I ", or a capital letter after a blank line)
+
+    # Lines that are clearly model meta-commentary, not letter content
+    _META = re.compile(
+        r"^(i'(?:ll|ve|m)\b|let me\b|i will\b|i need to\b|i should\b|i can\b|"
+        r"here (?:is|are|'s)\b|below is\b|as requested\b|"
+        r"the (?:user|candidate|applicant|job|role|following|cover|letter)\b|"
+        r"okay[,. ]|sure[,. !]|now[,. ]\b|first[,. ]\b|"
+        r"(?:cover letter|draft|paragraph|structure|note)[: ])",
+        re.IGNORECASE,
+    )
+
     letter_start = 0
     for i, line in enumerate(lines):
         stripped = line.strip()
-        if stripped.startswith(("Dear ", "My ", "I ", "As a", "As an", "With my", "With a")):
-            letter_start = i
-            break
-        # If we hit "Sincerely" near top, something is wrong — return raw
-    # Cut off anything after a second "Sincerely" (duplicate closings)
+        if not stripped:
+            continue  # blank line — keep scanning
+        if _META.match(stripped):
+            letter_start = i + 1  # this line is preamble; letter starts after it
+            continue
+        # First non-blank, non-meta line is the letter
+        letter_start = i
+        break
+
     result = "\n".join(lines[letter_start:])
+
     # Truncate at the closing signature
-    for closing in ["Sincerely,", "Best regards,", "Warm regards,"]:
+    for closing in ["Sincerely,", "Best regards,", "Warm regards,", "Regards,"]:
         idx = result.find(closing)
         if idx != -1:
-            # Keep everything up to and including the name after closing
             end = result.find("\n", idx + len(closing) + 1)
             if end == -1:
                 end = len(result)
