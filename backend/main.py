@@ -811,11 +811,19 @@ def _claim_orphan_jobs(db, user_id: str):
 
 
 @app.get("/api/tracker", tags=["tracker"])
-def get_tracker(user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
-    """Return all tracked jobs (status != 'new') grouped by status."""
+def get_tracker(
+    days: Optional[int] = Query(30, description="Show jobs updated within this many days; 0 = all time"),
+    user_id: str = Depends(_require_user),
+    db: Session = Depends(get_db),
+):
+    """Return tracked jobs (status != 'new') grouped by status, optionally filtered by recency."""
     from .models import APPLICATION_STATUSES
     _claim_orphan_jobs(db, user_id)
-    rows = db.query(JobRow).filter(JobRow.user_id == user_id, JobRow.status != "new").order_by(JobRow.updated_at.desc()).all()
+    q = db.query(JobRow).filter(JobRow.user_id == user_id, JobRow.status != "new")
+    if days and days > 0:
+        cutoff = datetime.utcnow() - timedelta(days=days)
+        q = q.filter(JobRow.updated_at >= cutoff)
+    rows = q.order_by(JobRow.updated_at.desc()).all()
     grouped: dict = {s: [] for s in APPLICATION_STATUSES if s != "new"}
     for row in rows:
         status = row.status or "interested"

@@ -17,6 +17,15 @@ const COLUMNS: { key: string; label: string; color: string; bg: string }[] = [
   { key: "closed",         label: "No Longer Open", color: "#475569", bg: "#f1f5f9" },
 ];
 
+const TIME_RANGES = [
+  { value: 7,  label: "Last 7 days" },
+  { value: 14, label: "Last 14 days" },
+  { value: 30, label: "Last 30 days" },
+  { value: 60, label: "Last 60 days" },
+  { value: 90, label: "Last 90 days" },
+  { value: 0,  label: "All time" },
+];
+
 interface Props {
   user: User | null;
   onSelectJob: (id: string) => void;
@@ -25,6 +34,7 @@ interface Props {
 export default function TrackerPage({ user, onSelectJob }: Props) {
   const [grouped, setGrouped] = useState<Record<string, Job[]>>({});
   const [loading, setLoading] = useState(true);
+  const [days, setDays] = useState(30);
   const [gmailConnected, setGmailConnected] = useState(false);
   const [lastSynced, setLastSynced] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -39,14 +49,14 @@ export default function TrackerPage({ user, onSelectJob }: Props) {
   const [linkingEvent, setLinkingEvent] = useState<string | null>(null);
   const [linkErrors, setLinkErrors] = useState<Record<string, string>>({});
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (d = days) => {
     try {
-      const [data, fu] = await Promise.all([fetchTracker(), fetchFollowups()]);
+      const [data, fu] = await Promise.all([fetchTracker(d), fetchFollowups()]);
       setGrouped(data);
       setFollowups(fu);
     } catch { /* ignore */ }
     finally { setLoading(false); }
-  }, []);
+  }, [days]);
 
   const loadEmailEvents = useCallback(async () => {
     if (!user) return;
@@ -178,6 +188,22 @@ export default function TrackerPage({ user, onSelectJob }: Props) {
         <span style={{ fontSize: 12, color: "#94a3b8", background: "#f1f5f9", borderRadius: 99, padding: "2px 10px" }}>
           {total} tracked
         </span>
+        <select
+          value={days}
+          onChange={e => {
+            const d = Number(e.target.value);
+            setDays(d);
+            load(d);
+          }}
+          style={{
+            fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 6,
+            border: "1px solid #e2e8f0", background: "#fff", color: "#334155", cursor: "pointer",
+          }}
+        >
+          {TIME_RANGES.map(r => (
+            <option key={r.value} value={r.value}>{r.label}</option>
+          ))}
+        </select>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
           {user && gmailConnected ? (
             <>

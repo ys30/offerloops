@@ -192,8 +192,8 @@ export async function updateJobStatus(
   return res.json();
 }
 
-export async function fetchTracker(): Promise<Record<string, Job[]>> {
-  const res = await fetch(`${BASE}/tracker`, { headers: authHeaders() });
+export async function fetchTracker(days = 30): Promise<Record<string, Job[]>> {
+  const res = await fetch(`${BASE}/tracker?days=${days}`, { headers: authHeaders() });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
