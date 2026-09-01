@@ -27,7 +27,7 @@ interface Props {
 }
 
 const PROVIDERS = [
-  { id: "nvidia",    label: "NVIDIA NIM · Auto", auto: true },
+  { id: "nvidia",    label: "NVIDIA NIM · Nemotron 70B", auto: true },
   { id: "anthropic", label: "Claude Opus 4.7",   auto: false },
   { id: "openai",    label: "GPT-4o",             auto: false },
   { id: "gemini",    label: "Gemini 1.5 Pro",     auto: false },
