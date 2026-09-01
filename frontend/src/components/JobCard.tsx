@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Job } from "../types";
 
 const STATUS_COLORS: Record<string, { color: string; bg: string }> = {
+  saved:          { color: "#d97706", bg: "#fffbeb" },
   not_interested: { color: "#78716c", bg: "#f5f5f4" },
   interested:     { color: "#6366f1", bg: "#eef2ff" },
   applied:        { color: "#2563eb", bg: "#eff6ff" },
@@ -10,12 +11,13 @@ const STATUS_COLORS: Record<string, { color: string; bg: string }> = {
   offer:          { color: "#16a34a", bg: "#f0fdf4" },
   rejected:       { color: "#dc2626", bg: "#fef2f2" },
   withdrawn:      { color: "#94a3b8", bg: "#f8fafc" },
+  closed:         { color: "#475569", bg: "#f1f5f9" },
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  not_interested: "Not Interested", interested: "Interested", applied: "Applied",
-  phone_screen: "Phone Screen", interview: "Interview", offer: "Offer",
-  rejected: "Rejected", withdrawn: "Withdrawn",
+  saved: "Saved", not_interested: "Not Interested", interested: "Interested",
+  applied: "Applied", phone_screen: "Phone Screen", interview: "Interview",
+  offer: "Offer", rejected: "Rejected", withdrawn: "Withdrawn", closed: "No Longer Open",
 };
 
 const SOURCE_COLORS: Record<string, string> = {
@@ -61,6 +63,7 @@ interface Props {
 
 const STATUS_OPTIONS = [
   { key: "new",            label: "New" },
+  { key: "saved",          label: "Saved" },
   { key: "not_interested", label: "Not Interested" },
   { key: "interested",     label: "Interested" },
   { key: "applied",        label: "Applied" },
@@ -69,6 +72,7 @@ const STATUS_OPTIONS = [
   { key: "offer",          label: "Offer" },
   { key: "rejected",       label: "Rejected" },
   { key: "withdrawn",      label: "Withdrawn" },
+  { key: "closed",         label: "No Longer Open" },
 ];
 
 export default function JobCard({ job, onSelect, onStatusChange }: Props) {
