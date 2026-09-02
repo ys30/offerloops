@@ -296,7 +296,7 @@ RULES:
   "ats_keywords": ["keyword1", "keyword2"]
 }"""
 
-COVER_LETTER_SYSTEM = """You are a senior career coach who writes cover letters that get interviews at competitive organizations. Write a deeply personalized, compelling cover letter that fits on ONE PAGE (~280–320 words total). Every sentence must earn its place — no filler, no fluff.
+COVER_LETTER_SYSTEM = """You are a senior career coach who writes cover letters that get interviews at competitive organizations. Output ONLY the cover letter text — no preamble, no reasoning, no planning notes, no <think> blocks. Start immediately with the first sentence of the letter. Write a deeply personalized, compelling cover letter that fits on ONE PAGE (~280–320 words total). Every sentence must earn its place — no filler, no fluff.
 
 STRUCTURE (4 tight paragraphs):
 
@@ -482,7 +482,7 @@ async def generate_cover_letter(
     last_err: Exception = RuntimeError("Unknown error")
     for attempt in range(2):
         try:
-            raw = await _call_provider(resolved_provider, resolved_model, COVER_LETTER_SYSTEM, user_msg, resolved_key, max_tokens=1000)
+            raw = await _call_provider(resolved_provider, resolved_model, COVER_LETTER_SYSTEM, user_msg, resolved_key, max_tokens=3000)
             result = _extract_cover_letter(raw)
             if result.strip():
                 return result
