@@ -25,14 +25,14 @@ PROVIDERS = {
     "nvidia": {
         "label": "NVIDIA NIM · Auto",
         "models": [
+            "nvidia/nemotron-3-ultra-550b-a55b",
             "nvidia/llama-3.1-nemotron-70b-instruct",
-            "nvidia/llama-3.1-nemotron-ultra-253b-v1",
-            "nvidia/nemotron-3-super-120b-a12b",
+            "nvidia/nemotron-4-340b-instruct",
             "mistralai/mistral-large-2-instruct",
             "meta/llama-3.1-405b-instruct",
             "openai/gpt-oss-120b",
         ],
-        "default_model": "nvidia/llama-3.1-nemotron-70b-instruct",
+        "default_model": "nvidia/nemotron-3-ultra-550b-a55b",
         "env_key": "NVIDIA_API_KEY",
         "base_url": "https://integrate.api.nvidia.com/v1",
     },

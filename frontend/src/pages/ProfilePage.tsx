@@ -491,7 +491,7 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
         </div>
         {aiProvider === "nvidia" ? (
           <div style={{ marginTop: 8, fontSize: 11, color: "#16a34a" }}>
-            ✓ NVIDIA NIM (Nemotron 70B) — built-in, no key required
+            ✓ NVIDIA NIM (Nemotron Ultra 550B) — built-in, no key required
           </div>
         ) : aiKey && (
           <div style={{ marginTop: 8, fontSize: 11, color: "#7c3aed" }}>
