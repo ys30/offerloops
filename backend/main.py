@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 
 from fastapi import UploadFile, File
-from .database import EmailEventRow, GmailTokenRow, JobRow, ProfileRow, ProjectRow, StoryRow, SessionLocal, get_db, init_db
+from .database import EmailEventRow, GmailTokenRow, JobRow, ProfileRow, ProjectRow, PublicationRow, StoryRow, SessionLocal, get_db, init_db
 from .auth import (
     apply_new_password, consume_reset_token, create_reset_token, create_token,
     create_user, decode_token, get_user_by_email, get_user_by_id,
@@ -1140,9 +1140,11 @@ async def generate_stories(
     from .links_fetcher import build_links_context
     links_ctx = await build_links_context(profile)
     projects_ctx = _build_projects_context(db, user_id)
+    pubs_ctx = _build_publications_context(db, user_id)
     extra_parts = []
     if links_ctx: extra_parts.append(f"Additional context from profile links:\n{links_ctx}")
     if projects_ctx: extra_parts.append(projects_ctx)
+    if pubs_ctx: extra_parts.append(pubs_ctx)
     extra = ("\n\n" + "\n\n".join(extra_parts)) if extra_parts else ""
 
     prompt = f"""Based on this resume, generate 5 distinct STAR+Reflection interview stories, each covering a DIFFERENT category from this list: Leadership, Conflict Resolution, Failure & Learning, Innovation, Research & Analysis, Cross-team Collaboration, Technical Achievement, Optimization. Where relevant, reference specific projects or publications from the additional context.
@@ -1439,6 +1441,84 @@ def delete_project(project_id: str, user_id: str = Depends(_require_user), db: S
     row = db.get(ProjectRow, project_id)
     if not row or row.user_id != user_id:
         raise HTTPException(status_code=404, detail="Project not found")
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
+
+
+# ── Publications ──────────────────────────────────────────────────────
+
+class PublicationIn(BaseModel):
+    authors: str
+    title: str
+    journal: Optional[str] = None
+    year: Optional[str] = None
+    volume_pages: Optional[str] = None
+    doi_url: Optional[str] = None
+    pub_type: str = "journal"
+
+
+def _pub_out(row: PublicationRow) -> dict:
+    return {
+        "id": row.id, "user_id": row.user_id,
+        "authors": row.authors, "title": row.title,
+        "journal": row.journal, "year": row.year,
+        "volume_pages": row.volume_pages, "doi_url": row.doi_url,
+        "pub_type": row.pub_type,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
+
+
+def _build_publications_context(db, user_id: str) -> str:
+    rows = db.query(PublicationRow).filter(PublicationRow.user_id == user_id).order_by(PublicationRow.year.desc()).all()
+    if not rows:
+        return ""
+    lines = ["--- Publications ---"]
+    for r in rows:
+        citation = r.authors
+        if r.year: citation += f" ({r.year})."
+        citation += f" {r.title}."
+        if r.journal: citation += f" {r.journal}"
+        if r.volume_pages: citation += f", {r.volume_pages}"
+        citation += "."
+        if r.doi_url: citation += f" {r.doi_url}"
+        lines.append(citation)
+    return "\n".join(lines)
+
+
+@app.get("/api/publications", tags=["publications"])
+def list_publications(user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    rows = db.query(PublicationRow).filter(PublicationRow.user_id == user_id).order_by(PublicationRow.year.desc()).all()
+    return [_pub_out(r) for r in rows]
+
+
+@app.post("/api/publications", tags=["publications"])
+def create_publication(payload: PublicationIn, user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    import uuid as _u
+    row = PublicationRow(id=str(_u.uuid4()), user_id=user_id, **payload.model_dump())
+    db.add(row)
+    db.commit()
+    return _pub_out(row)
+
+
+@app.patch("/api/publications/{pub_id}", tags=["publications"])
+def update_publication(pub_id: str, payload: PublicationIn, user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    row = db.get(PublicationRow, pub_id)
+    if not row or row.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Publication not found")
+    for k, v in payload.model_dump().items():
+        setattr(row, k, v)
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    return _pub_out(row)
+
+
+@app.delete("/api/publications/{pub_id}", tags=["publications"])
+def delete_publication(pub_id: str, user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    row = db.get(PublicationRow, pub_id)
+    if not row or row.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Publication not found")
     db.delete(row)
     db.commit()
     return {"ok": True}
@@ -1790,6 +1870,9 @@ async def analyze_job(payload: AnalyzeRequest, user_id: str = Depends(_require_u
     projects_ctx = _build_projects_context(db, user_id)
     if projects_ctx:
         resume_text = resume_text + "\n\n" + projects_ctx
+    pubs_ctx = _build_publications_context(db, user_id)
+    if pubs_ctx:
+        resume_text = resume_text + "\n\n" + pubs_ctx
 
     try:
         result = await analyze_job_fit(

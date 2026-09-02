@@ -158,6 +158,22 @@ class ProjectRow(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class PublicationRow(Base):
+    __tablename__ = "publications"
+
+    id = Column(String, primary_key=True, default=lambda: str(__import__("uuid").uuid4()))
+    user_id = Column(String, index=True, nullable=False)
+    authors = Column(String, nullable=False)          # e.g. "Song Y, Pan Z, et al."
+    title = Column(Text, nullable=False)
+    journal = Column(String, nullable=True)           # journal / venue / publisher
+    year = Column(String, nullable=True)              # "2023"
+    volume_pages = Column(String, nullable=True)      # "12(1), 51"
+    doi_url = Column(String, nullable=True)
+    pub_type = Column(String, default="journal")      # journal | book | report | conference
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class StoryRow(Base):
     __tablename__ = "stories"
 
@@ -282,6 +298,27 @@ def _migrate(conn):
     except Exception:
         pass
 
+    # ── publications table ───────────────────────────────────────────────────
+    try:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS publications (
+                id VARCHAR NOT NULL PRIMARY KEY,
+                user_id VARCHAR NOT NULL,
+                authors VARCHAR NOT NULL,
+                title TEXT NOT NULL,
+                journal VARCHAR,
+                year VARCHAR,
+                volume_pages VARCHAR,
+                doi_url VARCHAR,
+                pub_type VARCHAR DEFAULT 'journal',
+                created_at DATETIME,
+                updated_at DATETIME
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS ix_publications_user_id ON publications(user_id)")
+    except Exception:
+        pass
+
     # ── stories table ────────────────────────────────────────────────────────
     try:
         scols = col_info("stories")
@@ -345,6 +382,29 @@ def _migrate_pg(conn):
         ]:
             if col not in existing_p:
                 conn.execute(text(f"ALTER TABLE projects ADD COLUMN {col} {typ}"))
+        conn.commit()
+    except Exception:
+        pass
+
+    # publications table — create if missing
+    try:
+        from sqlalchemy import text as _t
+        conn.execute(_t("""
+            CREATE TABLE IF NOT EXISTS publications (
+                id VARCHAR NOT NULL PRIMARY KEY,
+                user_id VARCHAR NOT NULL,
+                authors VARCHAR NOT NULL,
+                title TEXT NOT NULL,
+                journal VARCHAR,
+                year VARCHAR,
+                volume_pages VARCHAR,
+                doi_url VARCHAR,
+                pub_type VARCHAR DEFAULT 'journal',
+                created_at TIMESTAMP,
+                updated_at TIMESTAMP
+            )
+        """))
+        conn.execute(_t("CREATE INDEX IF NOT EXISTS ix_publications_user_id ON publications(user_id)"))
         conn.commit()
     except Exception:
         pass
