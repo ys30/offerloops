@@ -1849,15 +1849,15 @@ async def analyze_job(payload: AnalyzeRequest, user_id: str = Depends(_require_u
     if not row or (row.user_id is not None and row.user_id != user_id):
         raise HTTPException(status_code=404, detail="Job not found")
 
-    resume_text = payload.resume_text
+    resume_text = (payload.resume_text or "").strip()
     profile = None
     if not resume_text:
         from .profile import get_profile
         profile = get_profile(db, user_id)
-        if profile and profile.resume_text:
-            resume_text = profile.resume_text
+        if profile and (profile.resume_text or "").strip():
+            resume_text = profile.resume_text.strip()
         else:
-            raise HTTPException(status_code=422, detail="No resume provided and no profile saved. Upload your resume first.")
+            raise HTTPException(status_code=422, detail="No resume found. Go to Profile and save your resume first.")
 
     if profile is None:
         from .profile import get_profile
@@ -1911,15 +1911,15 @@ async def generate_application_pack(
     if not row or (row.user_id is not None and row.user_id != user_id):
         raise HTTPException(status_code=404, detail="Job not found")
 
-    resume_text = payload.resume_text
+    resume_text = (payload.resume_text or "").strip()
     pack_profile = None
     if not resume_text:
         from .profile import get_profile
         pack_profile = get_profile(db, user_id)
-        if pack_profile and pack_profile.resume_text:
-            resume_text = pack_profile.resume_text
+        if pack_profile and (pack_profile.resume_text or "").strip():
+            resume_text = pack_profile.resume_text.strip()
         else:
-            raise HTTPException(status_code=422, detail="No resume provided and no profile saved. Upload your resume first.")
+            raise HTTPException(status_code=422, detail="No resume found. Go to Profile and save your resume first.")
 
     if pack_profile is None:
         from .profile import get_profile

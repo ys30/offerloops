@@ -424,11 +424,17 @@ def _extract_cover_letter(raw: str) -> str:
     _META = re.compile(
         r"^(i'(?:ll|ve|m)\b|let me\b|i will\b|i need to\b|i should\b|i can\b|"
         r"here (?:is|are|'s)\b|below is\b|as requested\b|"
-        r"the (?:user|candidate|applicant|job|role|following|cover|letter)\b|"
+        r"the (?:user|candidate|applicant|resume|job|role|following|cover|letter)\b|"
         r"okay[,. ]|sure[,. !]|now[,. ]\b|first[,. ]\b|"
-        r"(?:cover letter|draft|paragraph|structure|note)[: ])",
+        r"(?:cover letter|draft|paragraph|structure|note|resume)[: ]|"
+        r"\[.*?\]$)",
         re.IGNORECASE,
     )
+
+    # Hard abort: model is complaining that the resume is absent
+    _EMPTY_RESUME = re.compile(r"resume\s+is\s+(empty|blank|missing|not\s+provided)", re.IGNORECASE)
+    if _EMPTY_RESUME.search(raw):
+        return ""
 
     letter_start = 0
     for i, line in enumerate(lines):
