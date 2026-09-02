@@ -210,7 +210,12 @@ export default function ApplicationPack({ result, onClose }: Props) {
         }}>
           {tab === "resume"
             ? <ResumePreview data={resumeData} fallback={resumeDisplay} />
-            : <div style={{ whiteSpace: "pre-wrap" }}>{result.cover_letter}</div>
+            : result.cover_letter?.trim()
+              ? <div style={{ whiteSpace: "pre-wrap" }}>{result.cover_letter}</div>
+              : <div style={{ color: "#94a3b8", fontStyle: "italic", textAlign: "center", padding: "32px 0" }}>
+                  Cover letter could not be generated.<br />
+                  <span style={{ fontSize: 12 }}>Make sure your resume is saved in Profile, then try again.</span>
+                </div>
           }
         </div>
 

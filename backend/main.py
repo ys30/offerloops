@@ -1976,6 +1976,8 @@ async def generate_application_pack(
                         api_key=payload.api_key,
                     ),
                 )
+                if not cover or not cover.strip():
+                    raise RuntimeError("Cover letter returned empty — try again or check that your resume is saved in Profile.")
                 result["tailored_resume"] = tailored
                 result["cover_letter"] = cover
             except Exception as e:
