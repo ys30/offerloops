@@ -490,6 +490,54 @@ export async function extractProjectFromUrl(
   return res.json();
 }
 
+// ── Publications ──────────────────────────────────────────────────
+
+export interface Publication {
+  id: string;
+  user_id: string;
+  authors: string;
+  title: string;
+  journal?: string;
+  year?: string;
+  volume_pages?: string;
+  doi_url?: string;
+  pub_type: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type PublicationPayload = Omit<Publication, "id" | "user_id" | "created_at" | "updated_at">;
+
+export async function fetchPublications(): Promise<Publication[]> {
+  const res = await fetch(`${BASE}/publications`, { headers: authHeaders() });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function createPublication(payload: Partial<PublicationPayload>): Promise<Publication> {
+  const res = await fetch(`${BASE}/publications`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await extractDetail(res));
+  return res.json();
+}
+
+export async function updatePublication(id: string, payload: Partial<PublicationPayload>): Promise<Publication> {
+  const res = await fetch(`${BASE}/publications/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await extractDetail(res));
+  return res.json();
+}
+
+export async function deletePublication(id: string): Promise<void> {
+  await fetch(`${BASE}/publications/${id}`, { method: "DELETE", headers: authHeaders() });
+}
+
 // ── STAR Story Bank ────────────────────────────────────────────────
 
 export interface Story {

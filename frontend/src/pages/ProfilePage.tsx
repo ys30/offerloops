@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { disconnectGmail, fetchGmailStatus, getToken, startGmailAuth, syncGmail, fetchProjects, createProject, updateProject, deleteProject, uploadProjectDoc, extractProjectFromUrl, suggestProjectOutcome, type Project, type ExtractUrlResult } from "../api";
+import { disconnectGmail, fetchGmailStatus, getToken, startGmailAuth, syncGmail, fetchProjects, createProject, updateProject, deleteProject, uploadProjectDoc, extractProjectFromUrl, suggestProjectOutcome, fetchPublications, createPublication, updatePublication, deletePublication, type Project, type ExtractUrlResult, type Publication } from "../api";
 import StoryBankPage from "./StoryBankPage";
 import type { GmailStatus } from "../types";
 
@@ -104,6 +104,12 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
   const [activeTab, setActiveTab] = useState<"profile" | "stories">("profile");
   const [education, setEducation] = useState<EducationEntry[]>([]);
 
+  const [publications, setPublications] = useState<Publication[]>([]);
+  const [editingPub, setEditingPub] = useState<Partial<Publication> | null>(null);
+  const [editPubId, setEditPubId] = useState<string | null>(null);
+  const [savingPub, setSavingPub] = useState(false);
+  const [pubFormError, setPubFormError] = useState("");
+
   useEffect(() => {
     fetchGmailStatus().then(setGmailStatus).catch(() => null);
   }, []);
@@ -138,6 +144,7 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
       try { setEducation(JSON.parse(p?.education_json || "[]")); } catch { setEducation([]); }
     });
     fetchProjects().then(setProjects).catch(() => null);
+    fetchPublications().then(setPublications).catch(() => null);
   }, []);
 
   const flash = (text: string, ok = true) => {
@@ -364,6 +371,42 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
     } finally {
       setSyncing(false);
     }
+  };
+
+  const EMPTY_PUB: Partial<Publication> = { authors: "", title: "", journal: "", year: "", volume_pages: "", doi_url: "", pub_type: "journal" };
+
+  const setPubField = (k: keyof Publication, v: unknown) => {
+    setEditingPub(p => p ? { ...p, [k]: v } : p);
+  };
+
+  const handleSavePub = async () => {
+    setPubFormError("");
+    if (!editingPub?.authors?.trim()) { setPubFormError("Authors is required."); return; }
+    if (!editingPub?.title?.trim()) { setPubFormError("Title is required."); return; }
+    setSavingPub(true);
+    try {
+      if (editPubId) {
+        const updated = await updatePublication(editPubId, editingPub as any);
+        setPublications(ps => ps.map(p => p.id === editPubId ? updated : p));
+      } else {
+        const created = await createPublication(editingPub as any);
+        setPublications(ps => [created, ...ps]);
+      }
+      setEditingPub(null);
+      setEditPubId(null);
+      flash("Publication saved.");
+    } catch (e: unknown) {
+      setPubFormError(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSavingPub(false);
+    }
+  };
+
+  const handleDeletePub = async (id: string) => {
+    if (!confirm("Delete this publication?")) return;
+    await deletePublication(id);
+    setPublications(ps => ps.filter(p => p.id !== id));
+    flash("Publication deleted.");
   };
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -892,6 +935,132 @@ export default function ProfilePage({ onBack, justConnectedGmail, gmailError }: 
               })}
             </div>
           </>
+        )}
+      </section>
+
+      {/* Publications */}
+      <section style={{ ...card, marginTop: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+          <div>
+            <h2 style={{ ...sectionTitle, margin: 0 }}>Publications</h2>
+            <p style={{ fontSize: 12, color: "#94a3b8", margin: "4px 0 0" }}>
+              AI reads these when generating your resume, cover letter, and STAR stories.
+            </p>
+          </div>
+          <button
+            onClick={() => { setEditPubId(null); setEditingPub({ ...EMPTY_PUB }); setPubFormError(""); }}
+            style={{ ...primaryBtn, fontSize: 13 }}
+          >
+            + Add Publication
+          </button>
+        </div>
+
+        {/* Add / Edit form */}
+        {editingPub && (
+          <div style={{ background: "#fff", border: "2px solid #2563eb", borderRadius: 10, padding: "16px 18px", marginBottom: 16 }}>
+            <h3 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: "#1e293b" }}>
+              {editPubId ? "Edit Publication" : "New Publication"}
+            </h3>
+            <div style={{ marginBottom: 10 }}>
+              <label style={lbl}>Authors * <span style={{ color: "#94a3b8", fontWeight: 400 }}>(e.g. Song Y, Pan Z, et al.)</span></label>
+              <input value={editingPub.authors || ""} onChange={e => setPubField("authors", e.target.value)}
+                placeholder="Song Y, Pan Z, et al." style={inp} />
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={lbl}>Title *</label>
+              <input value={editingPub.title || ""} onChange={e => setPubField("title", e.target.value)}
+                placeholder="Full publication title" style={inp} />
+            </div>
+            <div style={{ display: "flex", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+              <div style={{ flex: 2, minWidth: 180 }}>
+                <label style={lbl}>Journal / Venue</label>
+                <input value={editingPub.journal || ""} onChange={e => setPubField("journal", e.target.value)}
+                  placeholder="e.g. EPJ Data Science" style={inp} />
+              </div>
+              <div style={{ flex: 1, minWidth: 80 }}>
+                <label style={lbl}>Year</label>
+                <input value={editingPub.year || ""} onChange={e => setPubField("year", e.target.value)}
+                  placeholder="2023" style={inp} />
+              </div>
+              <div style={{ flex: 1, minWidth: 100 }}>
+                <label style={lbl}>Volume / Pages</label>
+                <input value={editingPub.volume_pages || ""} onChange={e => setPubField("volume_pages", e.target.value)}
+                  placeholder="12(1), 51" style={inp} />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+              <div style={{ flex: 2, minWidth: 200 }}>
+                <label style={lbl}>DOI / URL</label>
+                <input value={editingPub.doi_url || ""} onChange={e => setPubField("doi_url", e.target.value)}
+                  placeholder="https://doi.org/..." style={inp} />
+              </div>
+              <div style={{ flex: 1, minWidth: 120 }}>
+                <label style={lbl}>Type</label>
+                <select value={editingPub.pub_type || "journal"} onChange={e => setPubField("pub_type", e.target.value)}
+                  style={{ ...inp, cursor: "pointer" }}>
+                  <option value="journal">Journal article</option>
+                  <option value="conference">Conference paper</option>
+                  <option value="book">Book / chapter</option>
+                  <option value="report">Report / guide</option>
+                </select>
+              </div>
+            </div>
+            {pubFormError && (
+              <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 12, color: "#dc2626" }}>
+                {pubFormError}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={handleSavePub} disabled={savingPub} style={primaryBtn}>
+                {savingPub ? "Saving…" : editPubId ? "Save Changes" : "Add Publication"}
+              </button>
+              <button onClick={() => { setEditingPub(null); setEditPubId(null); setPubFormError(""); }} style={secondaryBtn}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {/* Publication list */}
+        {publications.length === 0 && !editingPub ? (
+          <div style={{ textAlign: "center", padding: "28px 0", color: "#94a3b8", fontSize: 13 }}>
+            No publications yet — click "+ Add Publication" to add one.
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {publications.map(pub => (
+              <div key={pub.id} style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px", background: "#fff" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b", lineHeight: 1.4 }}>{pub.title}</div>
+                    <div style={{ fontSize: 12, color: "#475569", marginTop: 3 }}>{pub.authors}</div>
+                    <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>
+                      {[pub.journal, pub.year, pub.volume_pages].filter(Boolean).join(" · ")}
+                    </div>
+                    <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
+                      <span style={{ fontSize: 10, background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: 3, padding: "1px 6px" }}>
+                        {pub.pub_type}
+                      </span>
+                      {pub.doi_url && (
+                        <a href={pub.doi_url} target="_blank" rel="noopener noreferrer"
+                          style={{ fontSize: 11, color: "#2563eb" }}>
+                          DOI ↗
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <button
+                      onClick={() => { setEditPubId(pub.id); setEditingPub({ ...pub }); setPubFormError(""); }}
+                      style={{ padding: "3px 10px", fontSize: 11, background: "#f8fafc", color: "#475569", border: "1px solid #e2e8f0", borderRadius: 4, cursor: "pointer" }}
+                    >Edit</button>
+                    <button
+                      onClick={() => handleDeletePub(pub.id)}
+                      style={{ padding: "3px 10px", fontSize: 11, background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 4, cursor: "pointer" }}
+                    >Delete</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </section>
 
