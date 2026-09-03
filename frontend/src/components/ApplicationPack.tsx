@@ -135,7 +135,6 @@ function buildCoverHTML(text: string, jobTitle: string, company: string, name?: 
   <div class="header"><div class="name">${name || ""}</div></div>
   <div class="to">Hiring Manager<br>${company}<br>Re: ${jobTitle}</div>
   ${paragraphs}
-  <div class="closing">Sincerely,<br><br>${name || ""}</div>
 </body>
 </html>`;
 }
