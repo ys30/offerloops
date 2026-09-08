@@ -11,7 +11,12 @@ from sqlalchemy.orm import Session
 
 from .database import UserRow
 
-SECRET_KEY = os.environ.get("JWT_SECRET", "offerloops-dev-secret-change-in-prod")
+_jwt_secret = os.environ.get("JWT_SECRET")
+if not _jwt_secret:
+    if os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("ENV") == "production":
+        raise RuntimeError("JWT_SECRET environment variable must be set in production. Run: openssl rand -hex 32")
+    _jwt_secret = "offerloops-dev-secret-change-in-prod"  # local dev only
+SECRET_KEY = _jwt_secret
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_DAYS = 30
 
