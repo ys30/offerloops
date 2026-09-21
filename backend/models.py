@@ -23,6 +23,13 @@ class JobSource(str, Enum):
     eighty_k_hours = "80k_hours"
     climatebase = "climatebase"
     idealist = "idealist"
+    handshake = "handshake"
+    workable = "workable"
+    remoteok = "remoteok"
+    themuse = "themuse"
+    smartrecruiters = "smartrecruiters"
+    jobicy = "jobicy"
+    remotive = "remotive"
     manual = "manual"
     other = "other"
 

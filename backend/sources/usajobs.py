@@ -16,7 +16,7 @@ USAJOBS_API = "https://data.usajobs.gov/api/search"
 
 def _get_headers() -> dict:
     api_key = os.environ.get("USAJOBS_API_KEY", "")
-    email = os.environ.get("USAJOBS_USER_AGENT", "job-search-platform@localhost")
+    email = os.environ.get("USAJOBS_USER_AGENT", "offerloops@localhost")
     headers = {
         "Host": "data.usajobs.gov",
         "User-Agent": email,

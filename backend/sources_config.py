@@ -45,48 +45,60 @@ USAJOBS_SEARCHES = [
     {"keyword": "analyst",      "organization": "AG", "pages": 1},   # USDA/Forest Service
 ]
 
-# Verified active Greenhouse boards (200 from boards-api.greenhouse.io)
+# Verified active Greenhouse boards (boards-api.greenhouse.io — re-verified 2026-09-19)
 GREENHOUSE_SLUGS = [
     # Environmental NGOs / think tanks
     "wri",              # World Resources Institute
-    "nrdc",             # Natural Resources Defense Council
-    "edf",              # Environmental Defense Fund
-    "rmi",              # Rocky Mountain Institute
-    "ceres",            # Ceres (sustainable investing)
-    "earthjustice",     # Environmental law nonprofit
-    "nature",           # The Nature Conservancy
-    "wcs",              # Wildlife Conservation Society
-    "awf",              # African Wildlife Foundation
     # Climate tech / energy
     "watershed",        # Climate software / carbon accounting
-    "climateai",        # Climate AI analytics
     "sunnova",          # Solar + battery
-    "arcadiapower",     # Clean energy data
-    "inari",            # Agricultural biotech / food systems
+    # Carbon removal / CDR
+    "carbondirect",     # Carbon Direct (science advisory)
+    "captura",          # Captura (ocean-based CO2 removal)
+    # Energy storage
+    "solidpower",       # Solid Power (solid-state batteries)
     # Research / consulting
     "rti",              # RTI International (research/consulting)
-    "icf",              # ICF (environmental consulting)
-    "tetratech",        # Tetra Tech (engineering/environment)
     # Data / geospatial
-    "descartes",        # Descartes Labs (geospatial AI)
-    "planet",           # Planet Labs (satellite imagery)
+    "planetlabs",       # Planet Labs (satellite imagery)
     # Energy / resources
     "enviva",           # Biomass/renewable energy
-    "nrg",              # NRG Energy
-    "nextracker",       # Solar tracking systems
+    # Geospatial / earth observation / data
+    "esri",             # Esri (GIS software) — 441 US jobs
+    "spire",            # Spire Global (satellite data) — 39 jobs
+    "hawkeye360",       # HawkEye 360 (RF satellite analytics) — 17 jobs
+    "blacksky",         # BlackSky Technology (satellite imagery analytics) — 23 jobs
+    "albedo",           # Albedo (commercial satellite imagery) — 10 jobs
+    # Data / AI platforms (many env/science roles)
+    "databricks",       # Databricks (data + AI) — 878 jobs
+    "muonspace",        # Muon Space (earth observation) — 121 jobs
+    # Advanced energy
+    "kairospower",      # Kairos Power (nuclear energy) — 25 jobs (Albuquerque NM location)
+    # Weather / climate intelligence
+    "tomorrow",         # Tomorrow.io (weather intelligence & climate services) — 20 jobs
+    # Scientific instruments for env research
+    "licor",            # LI-COR Biosciences (field research instruments) — 6 jobs
 ]
 
-# Verified active Lever boards
+# Verified active Lever boards (api.lever.co — re-verified 2026-09-19)
 LEVER_SLUGS = [
     "erg",              # Environmental Resources Group (consulting)
     "arcadia",          # Clean energy retail / data
-    "terraformation",   # Reforestation startup
     "pachama",          # Forest carbon monitoring
-    "watershed",        # Climate accounting (also on GH, deduplicated by source_id)
-    "energyvault",      # Grid-scale energy storage
-    "antora",           # Thermal energy storage
+    "charmindustrial",  # Charm Industrial (carbon removal via bio-oil)
+    "deepsky",          # Deep Sky (carbon capture project developer)
+    "palantir",         # Palantir (data analytics) — 313 jobs
+    "jupiterintel",     # Jupiter Intelligence (climate risk analytics) — 2 jobs
+    "arable",           # Arable (agricultural sensing + data science) — 5 jobs
 ]
 
 # Ashby slugs — included but silently skipped if auth is required
 # (Ashby's public API is not truly public; boards are authenticated per-company)
 ASHBY_SLUGS: list[str] = []
+
+# SmartRecruiters company slugs — verified 2026-09-19 (US-only filter applied at fetch time)
+SMARTRECRUITERS_SLUGS = [
+    "sgs",          # SGS (env monitoring, inspection, lab testing) — 347 US jobs
+    "eurofins",     # Eurofins (env/water/air laboratory testing) — 540 US jobs
+    "cardno",       # Cardno (env/water consulting) — 3 US jobs
+]

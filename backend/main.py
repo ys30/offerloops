@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 
 from fastapi import UploadFile, File
-from .database import EmailEventRow, GmailTokenRow, JobRow, ProfileRow, ProjectRow, PublicationRow, StoryRow, SessionLocal, get_db, init_db
+from .database import EmailEventRow, GmailTokenRow, JobRow, ProfileRow, ProjectRow, PublicationRow, StoryRow, UserJobScoreRow, SessionLocal, get_db, init_db
 from .auth import (
     apply_new_password, consume_reset_token, create_reset_token, create_token,
     create_user, decode_token, get_user_by_email, get_user_by_id,
@@ -42,6 +42,7 @@ from .models import (
 )
 from .pipeline import (
     ingest_greenhouse,
+    ingest_handshake,
     ingest_lever,
     ingest_usajobs,
     job_to_row,
@@ -49,7 +50,7 @@ from .pipeline import (
 )
 
 app = FastAPI(
-    title="Job Search Platform API",
+    title="OfferLoops API",
     description="Uniform job data pipeline — open for AI agents and humans.",
     version="0.1.0",
     docs_url="/api/docs",
@@ -199,6 +200,7 @@ def list_jobs(
     sort: str = Query("date", description="Sort order: date | score"),
     limit: int = Query(50, le=500),
     offset: int = Query(0),
+    user_id: Optional[str] = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     query = db.query(JobRow)
@@ -290,7 +292,24 @@ def list_jobs(
         rows = query.order_by(deprioritized, JobRow.ai_score.desc().nulls_last(), effective_date.desc()).offset(offset).limit(limit).all()
     else:
         rows = query.order_by(deprioritized, effective_date.desc()).offset(offset).limit(limit).all()
-    jobs = [row_to_job(r) for r in rows]
+    score_map: dict = {}
+    if user_id:
+        job_ids = [r.id for r in rows]
+        ujs_rows = db.query(UserJobScoreRow).filter(
+            UserJobScoreRow.user_id == user_id,
+            UserJobScoreRow.job_id.in_(job_ids),
+        ).all()
+        score_map = {u.job_id: u for u in ujs_rows}
+
+    jobs = []
+    for r in rows:
+        job = row_to_job(r)
+        ujs = score_map.get(r.id) if user_id else None
+        job.ai_score = ujs.score if ujs else None
+        job.ai_summary = ujs.summary if ujs else None
+        job.ai_tags = json.loads(ujs.ai_tags or "[]") if ujs else []
+        jobs.append(job)
+
     return JSONResponse(
         content=[j.model_dump(mode="json") for j in jobs],
         headers={"X-Total-Count": str(total), "Access-Control-Expose-Headers": "X-Total-Count"},
@@ -715,11 +734,21 @@ Rules: tags = technical skills (5-10); description = comprehensive; salary = nul
 
 
 @app.get("/api/jobs/{job_id}", response_model=Job, tags=["jobs"])
-def get_job(job_id: str, db: Session = Depends(get_db)):
+def get_job(job_id: str, user_id: Optional[str] = Depends(_current_user_id), db: Session = Depends(get_db)):
     row = db.get(JobRow, job_id)
     if not row:
         raise HTTPException(status_code=404, detail="Job not found")
-    return row_to_job(row)
+    job = row_to_job(row)
+    ujs = None
+    if user_id:
+        ujs = db.query(UserJobScoreRow).filter(
+            UserJobScoreRow.user_id == user_id,
+            UserJobScoreRow.job_id == job_id,
+        ).first()
+    job.ai_score = ujs.score if ujs else None
+    job.ai_summary = ujs.summary if ujs else None
+    job.ai_tags = json.loads(ujs.ai_tags or "[]") if ujs else []
+    return job
 
 
 @app.post("/api/jobs", response_model=Job, status_code=201, tags=["jobs"])
@@ -1820,12 +1849,33 @@ async def trigger_climatebase(user_id: str = Depends(_require_user), db: Session
     return await ingest_climatebase(db, user_id=user_id)
 
 
+@app.post("/api/ingest/handshake", tags=["ingest"])
+async def trigger_handshake(user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    """Requires HANDSHAKE_SESSION env var (session cookie from app.joinhandshake.com)."""
+    from .pipeline import ingest_handshake
+    return await ingest_handshake(db, user_id=user_id)
+
+
 @app.post("/api/ingest/all", tags=["ingest"])
 async def trigger_bulk(user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
     """Run all configured sources from sources_config.py."""
     from .pipeline import bulk_ingest
     try:
         return await bulk_ingest(db, user_id=user_id)
+    except PermissionError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+
+@app.post("/api/admin/ingest", tags=["ingest"])
+async def admin_ingest(request: Request, db: Session = Depends(get_db)):
+    """Keyless bulk ingest for server-side admin use (protected by JWT_SECRET header)."""
+    from .auth import SECRET_KEY
+    key = request.headers.get("X-Admin-Key", "")
+    if not key or key != SECRET_KEY:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    from .pipeline import bulk_ingest
+    try:
+        return await bulk_ingest(db)
     except PermissionError as e:
         raise HTTPException(status_code=401, detail=str(e))
 
@@ -1889,10 +1939,24 @@ async def analyze_job(payload: AnalyzeRequest, user_id: str = Depends(_require_u
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI analysis failed: {e}")
 
-    row.ai_score = result.score
-    row.ai_summary = result.summary
-    row.ai_tags = json.dumps(result.extracted_requirements)
-    row.updated_at = datetime.utcnow()
+    ujs = db.query(UserJobScoreRow).filter(
+        UserJobScoreRow.user_id == user_id,
+        UserJobScoreRow.job_id == row.id,
+    ).first()
+    if ujs:
+        ujs.score = result.score
+        ujs.summary = result.summary
+        ujs.ai_tags = json.dumps(result.extracted_requirements)
+        ujs.updated_at = datetime.utcnow()
+    else:
+        db.add(UserJobScoreRow(
+            user_id=user_id,
+            job_id=row.id,
+            score=result.score,
+            summary=result.summary,
+            ai_tags=json.dumps(result.extracted_requirements),
+            updated_at=datetime.utcnow(),
+        ))
     db.commit()
 
     return result
@@ -2035,7 +2099,10 @@ async def score_all_jobs(
 
     q = db.query(JobRow).filter(or_(JobRow.user_id == user_id, JobRow.user_id.is_(None)))
     if not rescore:
-        q = q.filter(JobRow.ai_score.is_(None))
+        already_scored = db.query(UserJobScoreRow.job_id).filter(
+            UserJobScoreRow.user_id == user_id
+        ).subquery()
+        q = q.filter(~JobRow.id.in_(already_scored))
     if days is not None:
         cutoff = datetime.utcnow() - timedelta(days=days)
         q = q.filter(JobRow.posted_date >= cutoff)
@@ -2088,13 +2155,25 @@ async def score_all_jobs(
                         api_key=api_key,
                     )
                     with SessionLocal() as write_db:
-                        row = write_db.get(JobRow, job_id)
-                        if row:
-                            row.ai_score = result.score
-                            row.ai_summary = result.summary
-                            row.ai_tags = json.dumps(result.extracted_requirements)
-                            row.updated_at = datetime.utcnow()
-                            write_db.commit()
+                        ujs = write_db.query(UserJobScoreRow).filter(
+                            UserJobScoreRow.user_id == user_id,
+                            UserJobScoreRow.job_id == job_id,
+                        ).first()
+                        if ujs:
+                            ujs.score = result.score
+                            ujs.summary = result.summary
+                            ujs.ai_tags = json.dumps(result.extracted_requirements)
+                            ujs.updated_at = datetime.utcnow()
+                        else:
+                            write_db.add(UserJobScoreRow(
+                                user_id=user_id,
+                                job_id=job_id,
+                                score=result.score,
+                                summary=result.summary,
+                                ai_tags=json.dumps(result.extracted_requirements),
+                                updated_at=datetime.utcnow(),
+                            ))
+                        write_db.commit()
                     return ("ok", job_id, job_title, result.score)
                 except Exception as e:
                     return ("error", job_id, job_title, str(e))

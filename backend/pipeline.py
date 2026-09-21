@@ -9,16 +9,23 @@ from typing import Optional
 
 from .database import JobRow
 from .models import Job, JobSource
-from .sources import USAJobsSource, GreenhouseSource, LeverSource, AshbySource, EightyKHoursSource, ClimatebaseSource, IdealistSource
+from .sources import USAJobsSource, GreenhouseSource, LeverSource, AshbySource, EightyKHoursSource, ClimatebaseSource, IdealistSource, HandshakeSource, WorkableSource, RemoteOKSource, TheMuseSource, SmartRecruitersSource, JobicySource, RemotiveSource
 
 SOURCES = {
-    "usajobs":     USAJobsSource(),
-    "greenhouse":  GreenhouseSource(),
-    "lever":       LeverSource(),
-    "ashby":       AshbySource(),
-    "80k_hours":   EightyKHoursSource(),
-    "climatebase": ClimatebaseSource(),
-    "idealist":    IdealistSource(),
+    "usajobs":          USAJobsSource(),
+    "greenhouse":       GreenhouseSource(),
+    "lever":            LeverSource(),
+    "ashby":            AshbySource(),
+    "80k_hours":        EightyKHoursSource(),
+    "climatebase":      ClimatebaseSource(),
+    "idealist":         IdealistSource(),
+    "handshake":        HandshakeSource(),
+    "workable":         WorkableSource(),
+    "remoteok":         RemoteOKSource(),
+    "themuse":          TheMuseSource(),
+    "smartrecruiters":  SmartRecruitersSource(),
+    "jobicy":           JobicySource(),
+    "remotive":         RemotiveSource(),
 }
 
 
@@ -199,6 +206,97 @@ async def ingest_idealist(db: Session, user_id: Optional[str] = None) -> dict:
     return {"ingested": ingested, "skipped": skipped, "source": "idealist"}
 
 
+async def ingest_handshake(db: Session, user_id: Optional[str] = None) -> dict:
+    source = SOURCES["handshake"]
+    ingested, skipped = 0, 0
+    async for job in source.fetch():
+        if db.get(JobRow, job.id):
+            skipped += 1
+            continue
+        db.add(job_to_row(job, user_id=user_id))
+        ingested += 1
+    db.commit()
+    return {"ingested": ingested, "skipped": skipped, "source": "handshake"}
+
+
+async def ingest_workable(db: Session, user_id: Optional[str] = None) -> dict:
+    source = SOURCES["workable"]
+    ingested, skipped = 0, 0
+    async for job in source.fetch():
+        if db.get(JobRow, job.id):
+            skipped += 1
+            continue
+        db.add(job_to_row(job, user_id=user_id))
+        ingested += 1
+    db.commit()
+    return {"ingested": ingested, "skipped": skipped, "source": "workable"}
+
+
+async def ingest_remoteok(db: Session, user_id: Optional[str] = None) -> dict:
+    source = SOURCES["remoteok"]
+    ingested, skipped = 0, 0
+    async for job in source.fetch():
+        if db.get(JobRow, job.id):
+            skipped += 1
+            continue
+        db.add(job_to_row(job, user_id=user_id))
+        ingested += 1
+    db.commit()
+    return {"ingested": ingested, "skipped": skipped, "source": "remoteok"}
+
+
+async def ingest_themuse(db: Session, user_id: Optional[str] = None) -> dict:
+    source = SOURCES["themuse"]
+    ingested, skipped = 0, 0
+    async for job in source.fetch():
+        if db.get(JobRow, job.id):
+            skipped += 1
+            continue
+        db.add(job_to_row(job, user_id=user_id))
+        ingested += 1
+    db.commit()
+    return {"ingested": ingested, "skipped": skipped, "source": "themuse"}
+
+
+async def ingest_jobicy(db: Session, user_id: Optional[str] = None) -> dict:
+    source = SOURCES["jobicy"]
+    ingested, skipped = 0, 0
+    async for job in source.fetch():
+        if db.get(JobRow, job.id):
+            skipped += 1
+            continue
+        db.add(job_to_row(job, user_id=user_id))
+        ingested += 1
+    db.commit()
+    return {"ingested": ingested, "skipped": skipped, "source": "jobicy"}
+
+
+async def ingest_remotive(db: Session, user_id: Optional[str] = None) -> dict:
+    source = SOURCES["remotive"]
+    ingested, skipped = 0, 0
+    async for job in source.fetch():
+        if db.get(JobRow, job.id):
+            skipped += 1
+            continue
+        db.add(job_to_row(job, user_id=user_id))
+        ingested += 1
+    db.commit()
+    return {"ingested": ingested, "skipped": skipped, "source": "remotive"}
+
+
+async def ingest_smartrecruiters(db: Session, company_slug: str, user_id: Optional[str] = None) -> dict:
+    source = SOURCES["smartrecruiters"]
+    ingested, skipped = 0, 0
+    async for job in source.fetch(company_slug=company_slug):
+        if db.get(JobRow, job.id):
+            skipped += 1
+            continue
+        db.add(job_to_row(job, user_id=user_id))
+        ingested += 1
+    db.commit()
+    return {"ingested": ingested, "skipped": skipped, "source": "smartrecruiters", "company": company_slug}
+
+
 async def bulk_ingest(db: Session, user_id: Optional[str] = None) -> dict:
     """Run all configured searches from sources_config.py."""
     from .sources_config import USAJOBS_SEARCHES, GREENHOUSE_SLUGS, LEVER_SLUGS, ASHBY_SLUGS
@@ -244,5 +342,42 @@ async def bulk_ingest(db: Session, user_id: Optional[str] = None) -> dict:
     totals["ingested"] += r["ingested"]
     totals["skipped"] += r["skipped"]
     results.append(r)
+
+    r = await ingest_handshake(db, user_id=user_id)
+    totals["ingested"] += r["ingested"]
+    totals["skipped"] += r["skipped"]
+    results.append(r)
+
+    r = await ingest_workable(db, user_id=user_id)
+    totals["ingested"] += r["ingested"]
+    totals["skipped"] += r["skipped"]
+    results.append(r)
+
+    r = await ingest_remoteok(db, user_id=user_id)
+    totals["ingested"] += r["ingested"]
+    totals["skipped"] += r["skipped"]
+    results.append(r)
+
+    r = await ingest_themuse(db, user_id=user_id)
+    totals["ingested"] += r["ingested"]
+    totals["skipped"] += r["skipped"]
+    results.append(r)
+
+    r = await ingest_jobicy(db, user_id=user_id)
+    totals["ingested"] += r["ingested"]
+    totals["skipped"] += r["skipped"]
+    results.append(r)
+
+    r = await ingest_remotive(db, user_id=user_id)
+    totals["ingested"] += r["ingested"]
+    totals["skipped"] += r["skipped"]
+    results.append(r)
+
+    from .sources_config import SMARTRECRUITERS_SLUGS
+    for slug in SMARTRECRUITERS_SLUGS:
+        r = await ingest_smartrecruiters(db, slug, user_id=user_id)
+        totals["ingested"] += r["ingested"]
+        totals["skipped"] += r["skipped"]
+        results.append(r)
 
     return {**totals, "details": results}

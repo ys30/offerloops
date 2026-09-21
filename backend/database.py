@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional  # noqa: F401
 
 from sqlalchemy import (
-    Column, DateTime, Float, String, Text, Boolean, create_engine, event
+    Column, DateTime, Float, String, Text, Boolean, create_engine, event, PrimaryKeyConstraint
 )
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -193,6 +193,19 @@ class StoryRow(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class UserJobScoreRow(Base):
+    __tablename__ = "user_job_scores"
+
+    user_id = Column(String, nullable=False, index=True)
+    job_id = Column(String, nullable=False, index=True)
+    score = Column(Float)
+    summary = Column(Text)
+    ai_tags = Column(Text, default="[]")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (PrimaryKeyConstraint("user_id", "job_id"),)
+
+
 def get_db():
     db = SessionLocal()
     try:
@@ -348,6 +361,22 @@ def _migrate(conn):
     except Exception:
         pass  # create_all will handle it
 
+
+    # ── user_job_scores table ────────────────────────────────────────────────
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_job_scores (
+            user_id VARCHAR NOT NULL,
+            job_id VARCHAR NOT NULL,
+            score FLOAT,
+            summary TEXT,
+            ai_tags TEXT DEFAULT '[]',
+            updated_at DATETIME,
+            PRIMARY KEY (user_id, job_id)
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_ujs_user_id ON user_job_scores(user_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_ujs_job_id ON user_job_scores(job_id)")
+
     conn.commit()
 
 
@@ -423,6 +452,25 @@ def _migrate_pg(conn):
         conn.commit()
     except Exception:
         pass  # table may not exist yet; create_all handles it
+
+    # ── user_job_scores table ────────────────────────────────────────────────
+    try:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS user_job_scores (
+                user_id VARCHAR NOT NULL,
+                job_id VARCHAR NOT NULL,
+                score FLOAT,
+                summary TEXT,
+                ai_tags TEXT DEFAULT '[]',
+                updated_at TIMESTAMP,
+                PRIMARY KEY (user_id, job_id)
+            )
+        """))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ujs_user_id ON user_job_scores(user_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ujs_job_id ON user_job_scores(job_id)"))
+        conn.commit()
+    except Exception:
+        pass
 
 
 def init_db():
