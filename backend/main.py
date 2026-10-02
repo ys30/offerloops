@@ -286,9 +286,16 @@ def list_jobs(
         else_=0,
     )
     total = query.count()
-    if sort == "score":
-        rows = query.order_by(deprioritized, JobRow.ai_score.desc().nulls_last(), effective_date.desc()).offset(offset).limit(limit).all()
-    elif sort == "score_date":
+    if sort in ("score", "score_date") and user_id:
+        from sqlalchemy.orm import aliased
+        ujs_alias = aliased(UserJobScoreRow)
+        rows = (
+            query
+            .outerjoin(ujs_alias, and_(ujs_alias.job_id == JobRow.id, ujs_alias.user_id == user_id))
+            .order_by(deprioritized, ujs_alias.score.desc().nulls_last(), effective_date.desc())
+            .offset(offset).limit(limit).all()
+        )
+    elif sort in ("score", "score_date"):
         rows = query.order_by(deprioritized, JobRow.ai_score.desc().nulls_last(), effective_date.desc()).offset(offset).limit(limit).all()
     else:
         rows = query.order_by(deprioritized, effective_date.desc()).offset(offset).limit(limit).all()
@@ -1854,6 +1861,42 @@ async def trigger_handshake(user_id: str = Depends(_require_user), db: Session =
     """Requires HANDSHAKE_SESSION env var (session cookie from app.joinhandshake.com)."""
     from .pipeline import ingest_handshake
     return await ingest_handshake(db, user_id=user_id)
+
+
+@app.post("/api/ingest/workable", tags=["ingest"])
+async def trigger_workable(user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    from .pipeline import ingest_workable
+    return await ingest_workable(db, user_id=user_id)
+
+
+@app.post("/api/ingest/remoteok", tags=["ingest"])
+async def trigger_remoteok(user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    from .pipeline import ingest_remoteok
+    return await ingest_remoteok(db, user_id=user_id)
+
+
+@app.post("/api/ingest/themuse", tags=["ingest"])
+async def trigger_themuse(user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    from .pipeline import ingest_themuse
+    return await ingest_themuse(db, user_id=user_id)
+
+
+@app.post("/api/ingest/jobicy", tags=["ingest"])
+async def trigger_jobicy(user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    from .pipeline import ingest_jobicy
+    return await ingest_jobicy(db, user_id=user_id)
+
+
+@app.post("/api/ingest/remotive", tags=["ingest"])
+async def trigger_remotive(user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    from .pipeline import ingest_remotive
+    return await ingest_remotive(db, user_id=user_id)
+
+
+@app.post("/api/ingest/smartrecruiters/{company_slug}", tags=["ingest"])
+async def trigger_smartrecruiters(company_slug: str, user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    from .pipeline import ingest_smartrecruiters
+    return await ingest_smartrecruiters(db, company_slug=company_slug, user_id=user_id)
 
 
 @app.post("/api/ingest/all", tags=["ingest"])

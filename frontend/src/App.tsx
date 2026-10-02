@@ -361,8 +361,14 @@ export default function App() {
                 job={j}
                 onSelect={setSelectedId}
                 onStatusChange={user ? async (jobId, status) => {
+                  setJobs(prev => {
+                    const updated = prev.map(x => x.id === jobId ? { ...x, status } : x);
+                    if (status === "interested") return updated;
+                    const idx = updated.findIndex(x => x.id === jobId);
+                    if (idx === -1) return updated;
+                    return [...updated.slice(0, idx), ...updated.slice(idx + 1), updated[idx]];
+                  });
                   await updateJobStatus(jobId, status);
-                  setJobs(prev => prev.map(x => x.id === jobId ? { ...x, status } : x));
                 } : undefined}
               />
             ))}

@@ -299,85 +299,43 @@ async def ingest_smartrecruiters(db: Session, company_slug: str, user_id: Option
 
 async def bulk_ingest(db: Session, user_id: Optional[str] = None) -> dict:
     """Run all configured searches from sources_config.py."""
-    from .sources_config import USAJOBS_SEARCHES, GREENHOUSE_SLUGS, LEVER_SLUGS, ASHBY_SLUGS
+    from .sources_config import USAJOBS_SEARCHES, GREENHOUSE_SLUGS, LEVER_SLUGS, ASHBY_SLUGS, SMARTRECRUITERS_SLUGS
 
     totals: dict[str, int] = {"ingested": 0, "skipped": 0}
     results: list[dict] = []
 
+    async def _run(coro):
+        try:
+            r = await coro
+            totals["ingested"] += r.get("ingested", 0)
+            totals["skipped"] += r.get("skipped", 0)
+            results.append(r)
+        except Exception as exc:
+            results.append({"error": str(exc)})
+
     for search in USAJOBS_SEARCHES:
-        r = await ingest_usajobs(db, user_id=user_id, **search)
-        totals["ingested"] += r["ingested"]
-        totals["skipped"] += r["skipped"]
-        results.append(r)
+        await _run(ingest_usajobs(db, user_id=user_id, **search))
 
     for slug in GREENHOUSE_SLUGS:
-        r = await ingest_greenhouse(db, slug, user_id=user_id)
-        totals["ingested"] += r["ingested"]
-        totals["skipped"] += r["skipped"]
-        results.append(r)
+        await _run(ingest_greenhouse(db, slug, user_id=user_id))
 
     for slug in LEVER_SLUGS:
-        r = await ingest_lever(db, slug, user_id=user_id)
-        totals["ingested"] += r["ingested"]
-        totals["skipped"] += r["skipped"]
-        results.append(r)
+        await _run(ingest_lever(db, slug, user_id=user_id))
 
     for slug in ASHBY_SLUGS:
-        r = await ingest_ashby(db, slug, user_id=user_id)
-        totals["ingested"] += r["ingested"]
-        totals["skipped"] += r["skipped"]
-        results.append(r)
+        await _run(ingest_ashby(db, slug, user_id=user_id))
 
-    r = await ingest_80k(db, user_id=user_id)
-    totals["ingested"] += r["ingested"]
-    totals["skipped"] += r["skipped"]
-    results.append(r)
+    await _run(ingest_80k(db, user_id=user_id))
+    await _run(ingest_climatebase(db, user_id=user_id))
+    await _run(ingest_idealist(db, user_id=user_id))
+    await _run(ingest_handshake(db, user_id=user_id))
+    await _run(ingest_workable(db, user_id=user_id))
+    await _run(ingest_remoteok(db, user_id=user_id))
+    await _run(ingest_themuse(db, user_id=user_id))
+    await _run(ingest_jobicy(db, user_id=user_id))
+    await _run(ingest_remotive(db, user_id=user_id))
 
-    r = await ingest_climatebase(db, user_id=user_id)
-    totals["ingested"] += r["ingested"]
-    totals["skipped"] += r["skipped"]
-    results.append(r)
-
-    r = await ingest_idealist(db, user_id=user_id)
-    totals["ingested"] += r["ingested"]
-    totals["skipped"] += r["skipped"]
-    results.append(r)
-
-    r = await ingest_handshake(db, user_id=user_id)
-    totals["ingested"] += r["ingested"]
-    totals["skipped"] += r["skipped"]
-    results.append(r)
-
-    r = await ingest_workable(db, user_id=user_id)
-    totals["ingested"] += r["ingested"]
-    totals["skipped"] += r["skipped"]
-    results.append(r)
-
-    r = await ingest_remoteok(db, user_id=user_id)
-    totals["ingested"] += r["ingested"]
-    totals["skipped"] += r["skipped"]
-    results.append(r)
-
-    r = await ingest_themuse(db, user_id=user_id)
-    totals["ingested"] += r["ingested"]
-    totals["skipped"] += r["skipped"]
-    results.append(r)
-
-    r = await ingest_jobicy(db, user_id=user_id)
-    totals["ingested"] += r["ingested"]
-    totals["skipped"] += r["skipped"]
-    results.append(r)
-
-    r = await ingest_remotive(db, user_id=user_id)
-    totals["ingested"] += r["ingested"]
-    totals["skipped"] += r["skipped"]
-    results.append(r)
-
-    from .sources_config import SMARTRECRUITERS_SLUGS
     for slug in SMARTRECRUITERS_SLUGS:
-        r = await ingest_smartrecruiters(db, slug, user_id=user_id)
-        totals["ingested"] += r["ingested"]
-        totals["skipped"] += r["skipped"]
-        results.append(r)
+        await _run(ingest_smartrecruiters(db, slug, user_id=user_id))
 
     return {**totals, "details": results}

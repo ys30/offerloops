@@ -1,20 +1,26 @@
 import { useState } from "react";
-import { importJobFromUrl, ingestCompany, ingestUSAJobs } from "../api";
+import { getToken, importJobFromUrl, ingestCompany, ingestUSAJobs } from "../api";
 
 const TABS = [
-  { id: "link",       label: "🔗 From Link" },
-  { id: "usajobs",    label: "USAJobs" },
-  { id: "greenhouse", label: "Greenhouse" },
-  { id: "lever",      label: "Lever" },
-  { id: "ashby",      label: "Ashby" },
-  { id: "80k",        label: "80k Hours" },
-  { id: "climatebase",label: "Climatebase" },
+  { id: "link",           label: "🔗 From Link" },
+  { id: "usajobs",        label: "USAJobs" },
+  { id: "greenhouse",     label: "Greenhouse" },
+  { id: "lever",          label: "Lever" },
+  { id: "ashby",          label: "Ashby" },
+  { id: "smartrecruiters",label: "SmartRecruiters" },
+  { id: "80k",            label: "80k Hours" },
+  { id: "climatebase",    label: "Climatebase" },
+  { id: "workable",       label: "Workable" },
+  { id: "remoteok",       label: "RemoteOK" },
+  { id: "themuse",        label: "The Muse" },
+  { id: "jobicy",         label: "Jobicy" },
+  { id: "remotive",       label: "Remotive" },
 ] as const;
 
 type TabId = typeof TABS[number]["id"];
 
-const SLUG_TABS: TabId[] = ["greenhouse", "lever", "ashby"];
-const NO_SLUG_TABS: TabId[] = ["80k", "climatebase"];
+const SLUG_TABS: TabId[] = ["greenhouse", "lever", "ashby", "smartrecruiters"];
+const NO_SLUG_TABS: TabId[] = ["80k", "climatebase", "workable", "remoteok", "themuse", "jobicy", "remotive"];
 
 interface Props { onDone: () => void }
 
@@ -86,13 +92,28 @@ export default function IngestPanel({ onDone }: Props) {
       if (tab === "usajobs") {
         result = await ingestUSAJobs({ keyword, organization: org, location, pages: 2 });
       } else if (NO_SLUG_TABS.includes(tab)) {
-        const endpoint = tab === "80k" ? "/api/ingest/80k" : "/api/ingest/climatebase";
-        const res = await fetch(endpoint, { method: "POST" });
+        const endpointMap: Record<string, string> = {
+          "80k": "/api/ingest/80k",
+          "climatebase": "/api/ingest/climatebase",
+          "workable": "/api/ingest/workable",
+          "remoteok": "/api/ingest/remoteok",
+          "themuse": "/api/ingest/themuse",
+          "jobicy": "/api/ingest/jobicy",
+          "remotive": "/api/ingest/remotive",
+        };
+        const tok = getToken();
+        const res = await fetch(endpointMap[tab], { method: "POST", headers: tok ? { Authorization: `Bearer ${tok}` } : {} });
         if (!res.ok) throw new Error(await res.text());
         result = await res.json();
       } else {
+        const tok = getToken();
+        const authH = tok ? { Authorization: `Bearer ${tok}` } : {};
         if (tab === "ashby") {
-          const res = await fetch(`/api/ingest/ashby/${slug.trim()}`, { method: "POST" });
+          const res = await fetch(`/api/ingest/ashby/${slug.trim()}`, { method: "POST", headers: authH });
+          if (!res.ok) throw new Error(await res.text());
+          result = await res.json();
+        } else if (tab === "smartrecruiters") {
+          const res = await fetch(`/api/ingest/smartrecruiters/${slug.trim()}`, { method: "POST", headers: authH });
           if (!res.ok) throw new Error(await res.text());
           result = await res.json();
         } else {
@@ -208,7 +229,9 @@ export default function IngestPanel({ onDone }: Props) {
       {needsSlug && (
         <input
           style={inp}
-          placeholder={`Company slug (e.g. "watershed", "nrdc", "planet")`}
+          placeholder={tab === "smartrecruiters"
+            ? `Company slug (e.g. "sgs", "eurofins", "cardno")`
+            : `Company slug (e.g. "watershed", "nrdc", "planet")`}
           value={slug}
           onChange={e => setSlug(e.target.value)}
         />
@@ -218,6 +241,11 @@ export default function IngestPanel({ onDone }: Props) {
         <div style={{ fontSize: 12, color: "#64748b" }}>
           {tab === "80k" && "Fetches all current listings from 80,000 Hours job board."}
           {tab === "climatebase" && "Fetches climate-focused jobs from Climatebase.org."}
+          {tab === "workable" && "Searches Workable for environmental science, GIS, climate, and data roles."}
+          {tab === "remoteok" && "Fetches remote data-science, ML, GIS, and environmental jobs from RemoteOK."}
+          {tab === "themuse" && "Fetches Science/Engineering and Data/Analytics US jobs from The Muse."}
+          {tab === "jobicy" && "Fetches remote data-science and engineering jobs from Jobicy."}
+          {tab === "remotive" && "Fetches remote data and software-dev jobs from Remotive."}
         </div>
       )}
 
