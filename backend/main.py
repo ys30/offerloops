@@ -287,14 +287,17 @@ def list_jobs(
     )
     total = query.count()
     if sort in ("score", "score_date") and user_id:
-        from sqlalchemy.orm import aliased
-        ujs_alias = aliased(UserJobScoreRow)
-        rows = (
-            query
-            .outerjoin(ujs_alias, and_(ujs_alias.job_id == JobRow.id, ujs_alias.user_id == user_id))
-            .order_by(deprioritized, ujs_alias.score.desc().nulls_last(), effective_date.desc())
-            .offset(offset).limit(limit).all()
+        from sqlalchemy import select as _select
+        user_score_sub = (
+            _select(UserJobScoreRow.score)
+            .where(UserJobScoreRow.job_id == JobRow.id)
+            .where(UserJobScoreRow.user_id == user_id)
+            .correlate(JobRow)
+            .scalar_subquery()
         )
+        rows = query.order_by(
+            deprioritized, user_score_sub.desc().nulls_last(), effective_date.desc()
+        ).offset(offset).limit(limit).all()
     elif sort in ("score", "score_date"):
         rows = query.order_by(deprioritized, JobRow.ai_score.desc().nulls_last(), effective_date.desc()).offset(offset).limit(limit).all()
     else:
