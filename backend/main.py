@@ -176,7 +176,7 @@ def _us_only_filter():
     )
 
     return and_(
-        or_(country_us, state_us, raw_us),
+        or_(country_us, state_us, raw_us, JobRow.location_remote == True),
         ~non_us,
     )
 
@@ -2151,7 +2151,7 @@ async def score_all_jobs(
         q = q.filter(~JobRow.id.in_(already_scored))
     if days is not None:
         cutoff = datetime.utcnow() - timedelta(days=days)
-        q = q.filter(JobRow.posted_date >= cutoff)
+        q = q.filter(or_(JobRow.posted_date >= cutoff, JobRow.created_at >= cutoff))
     if states:
         state_list = [s.strip().upper() for s in states.split(",") if s.strip()]
         q = q.filter(JobRow.location_state.in_(state_list))
