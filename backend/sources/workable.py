@@ -111,6 +111,15 @@ class WorkableSource:
                         job_id = j.get("id", "")
                         if not job_id or job_id in seen:
                             continue
+
+                        # Skip non-US jobs that are not remote
+                        _loc = j.get("location") or {}
+                        _country = _loc.get("countryName", "")
+                        _workplace = j.get("workplace", "")
+                        _is_remote = _workplace in ("remote", "hybrid")
+                        if _country and _country not in ("United States", "US", "USA") and not _is_remote:
+                            continue
+
                         seen.add(job_id)
 
                         now = datetime.utcnow()

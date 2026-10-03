@@ -15,6 +15,21 @@ _CATEGORIES = [
     "engineering",
 ]
 
+_SKIP_TITLE = frozenset([
+    "react", "angular", "vue", "frontend", "front-end", "front end",
+    "ios developer", "android developer", "mobile developer", "flutter developer",
+    ".net developer", "ruby developer", "rails engineer", "php developer",
+    "wordpress developer", "laravel developer",
+    "devops engineer", "sre ", "site reliability engineer",
+    "copywriter", "content writer",
+    "sales representative", "account executive", "customer success manager",
+    "revenue operations", "sales operations",
+    "ux designer", "ui designer", "graphic designer",
+    "qa engineer", "quality assurance engineer", "test engineer",
+    "recruiter", "talent acquisition",
+    "product manager", "project manager",
+])
+
 
 def _stable_id(job_id) -> str:
     return "jcy-" + hashlib.md5(f"jobicy-{job_id}".encode()).hexdigest()[:12]
@@ -63,7 +78,7 @@ class JobicySource:
         async with httpx.AsyncClient(timeout=30) as client:
             for category in _CATEGORIES:
                 try:
-                    resp = await client.get(_API_URL, params={"count": 100, "industry": category})
+                    resp = await client.get(_API_URL, params={"count": 100, "industry": category, "geo": "usa"})
                     if not resp.is_success:
                         continue
                     data = resp.json()
@@ -74,6 +89,12 @@ class JobicySource:
                     job_id = str(j.get("id") or j.get("jobSlug") or "")
                     if not job_id or job_id in seen:
                         continue
+
+                    # Skip clearly non-data-science roles
+                    _title_lower = (j.get("jobTitle") or "").lower()
+                    if any(pat in _title_lower for pat in _SKIP_TITLE):
+                        continue
+
                     seen.add(job_id)
 
                     now = datetime.utcnow()

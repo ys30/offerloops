@@ -15,6 +15,20 @@ _CATEGORIES = [
     "software-dev",
 ]
 
+_SKIP_TITLE = frozenset([
+    "react", "angular", "vue", "frontend", "front-end", "front end",
+    "ios developer", "android developer", "mobile developer", "flutter developer",
+    ".net developer", "ruby developer", "rails engineer", "php developer",
+    "wordpress developer", "laravel developer",
+    "devops engineer", "sre ", "site reliability engineer",
+    "copywriter", "content writer", "technical writer",
+    "sales representative", "account executive", "customer success",
+    "ux designer", "ui designer", "graphic designer",
+    "qa engineer", "quality assurance engineer", "test engineer",
+    "recruiter", "hr ", "human resources",
+    "product manager", "project manager",
+])
+
 
 def _stable_id(job_id) -> str:
     return "rmtv-" + hashlib.md5(f"remotive-{job_id}".encode()).hexdigest()[:12]
@@ -52,6 +66,12 @@ class RemotiveSource:
                     job_id = str(j.get("id") or "")
                     if not job_id or job_id in seen:
                         continue
+
+                    # Skip clearly non-data-science roles
+                    _title_lower = (j.get("title") or "").lower()
+                    if any(pat in _title_lower for pat in _SKIP_TITLE):
+                        continue
+
                     seen.add(job_id)
 
                     now = datetime.utcnow()

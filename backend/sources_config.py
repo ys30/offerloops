@@ -69,8 +69,6 @@ GREENHOUSE_SLUGS = [
     "hawkeye360",       # HawkEye 360 (RF satellite analytics) — 17 jobs
     "blacksky",         # BlackSky Technology (satellite imagery analytics) — 23 jobs
     "albedo",           # Albedo (commercial satellite imagery) — 10 jobs
-    # Data / AI platforms (many env/science roles)
-    "databricks",       # Databricks (data + AI) — 878 jobs
     "muonspace",        # Muon Space (earth observation) — 121 jobs
     # Advanced energy
     "kairospower",      # Kairos Power (nuclear energy) — 25 jobs (Albuquerque NM location)
@@ -87,7 +85,6 @@ LEVER_SLUGS = [
     "pachama",          # Forest carbon monitoring
     "charmindustrial",  # Charm Industrial (carbon removal via bio-oil)
     "deepsky",          # Deep Sky (carbon capture project developer)
-    "palantir",         # Palantir (data analytics) — 313 jobs
     "jupiterintel",     # Jupiter Intelligence (climate risk analytics) — 2 jobs
     "arable",           # Arable (agricultural sensing + data science) — 5 jobs
 ]
