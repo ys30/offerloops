@@ -37,12 +37,22 @@ USAJOBS_SEARCHES = [
     {"keyword": "machine learning",          "pages": 1},
     {"keyword": "computational scientist",   "pages": 1},
     {"keyword": "research scientist",        "pages": 1},
+    # Research / policy / decision support
+    {"keyword": "policy analyst",            "pages": 2},
+    {"keyword": "program analyst",           "pages": 1},
+    {"keyword": "research analyst",          "pages": 1},
+    {"keyword": "quantitative analyst",      "pages": 1},
+    {"keyword": "applied scientist",         "pages": 1},
     # Agency-specific
     {"keyword": "scientist",    "organization": "EP", "pages": 2},   # EPA
     {"keyword": "scientist",    "organization": "GS", "pages": 2},   # USGS
     {"keyword": "scientist",    "organization": "NN", "pages": 1},   # NOAA
+    {"keyword": "analyst",      "organization": "EP", "pages": 2},   # EPA analysts
+    {"keyword": "analyst",      "organization": "GS", "pages": 1},   # USGS analysts
     {"keyword": "engineer",     "organization": "IN", "pages": 1},   # Interior
     {"keyword": "analyst",      "organization": "AG", "pages": 1},   # USDA/Forest Service
+    {"keyword": "data",         "organization": "NN", "pages": 1},   # NOAA data roles
+    {"keyword": "research",     "organization": "EP", "pages": 1},   # EPA research
 ]
 
 # Verified active Greenhouse boards (boards-api.greenhouse.io — re-verified 2026-09-19)

@@ -13,20 +13,32 @@ _PAGE_SIZE = 20
 _PAGES_PER_KEYWORD = 2
 
 _KEYWORDS = [
+    # Environmental science core
     "environmental scientist",
     "environmental engineer",
+    "environmental analyst",
     "water resources",
     "hydrologist",
-    "geospatial",
-    "remote sensing",
-    "climate scientist",
-    "data scientist environmental",
-    "GIS analyst",
-    "sustainability analyst",
+    "groundwater scientist",
     "ecologist",
+    "conservation biologist",
     "air quality scientist",
-    "environmental compliance",
-    "conservation scientist",
+    "atmospheric scientist",
+    # Geospatial / remote sensing
+    "geospatial analyst",
+    "GIS analyst",
+    "remote sensing scientist",
+    "earth observation",
+    # Data science / research
+    "data scientist",
+    "research scientist",
+    "applied scientist",
+    "computational scientist",
+    # Climate / sustainability
+    "climate scientist",
+    "sustainability scientist",
+    "environmental data scientist",
+    "environmental monitoring",
 ]
 
 _HEADERS = {
