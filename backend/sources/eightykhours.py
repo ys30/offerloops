@@ -73,25 +73,32 @@ class EightyKHoursSource:
     id = "80k_hours"
 
     async def fetch(self, **kwargs) -> AsyncIterator[Job]:
-        payload = {
-            "requests": [
-                {
-                    "indexName": "jobs_prod",
-                    "params": "hitsPerPage=200&page=0",
-                }
-            ]
-        }
+        hits: list[dict] = []
         async with httpx.AsyncClient(timeout=30) as client:
-            try:
-                resp = await client.post(ALGOLIA_URL, json=payload, headers=HEADERS)
-                if not resp.is_success:
-                    return
-                data = resp.json()
-            except Exception:
-                return
-
-        results = data.get("results", [])
-        hits = results[0].get("hits", []) if results else []
+            page = 0
+            while True:
+                payload = {
+                    "requests": [
+                        {
+                            "indexName": "jobs_prod",
+                            "params": f"hitsPerPage=200&page={page}",
+                        }
+                    ]
+                }
+                try:
+                    resp = await client.post(ALGOLIA_URL, json=payload, headers=HEADERS)
+                    if not resp.is_success:
+                        break
+                    data = resp.json()
+                except Exception:
+                    break
+                results = data.get("results", [])
+                page_hits = results[0].get("hits", []) if results else []
+                hits.extend(page_hits)
+                nb_pages = results[0].get("nbPages", 1) if results else 1
+                page += 1
+                if page >= nb_pages or not page_hits:
+                    break
 
         for j in hits:
             now = datetime.utcnow()
