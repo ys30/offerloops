@@ -9,17 +9,18 @@ from typing import Optional
 
 from .database import JobRow
 from .models import Job, JobSource
-from .sources import USAJobsSource, GreenhouseSource, LeverSource, AshbySource, EightyKHoursSource, ClimatebaseSource, IdealistSource, HandshakeSource, WorkableSource, RemoteOKSource, TheMuseSource, SmartRecruitersSource, JobicySource, RemotiveSource
+from .sources import USAJobsSource, GreenhouseSource, LeverSource, AshbySource, EightyKHoursSource, ClimatebaseSource, EnvironmentalCareerSource, IdealistSource, HandshakeSource, WorkableSource, RemoteOKSource, TheMuseSource, SmartRecruitersSource, JobicySource, RemotiveSource
 
 SOURCES = {
-    "usajobs":          USAJobsSource(),
-    "greenhouse":       GreenhouseSource(),
-    "lever":            LeverSource(),
-    "ashby":            AshbySource(),
-    "80k_hours":        EightyKHoursSource(),
-    "climatebase":      ClimatebaseSource(),
-    "idealist":         IdealistSource(),
-    "handshake":        HandshakeSource(),
+    "usajobs":              USAJobsSource(),
+    "greenhouse":           GreenhouseSource(),
+    "lever":                LeverSource(),
+    "ashby":                AshbySource(),
+    "80k_hours":            EightyKHoursSource(),
+    "climatebase":          ClimatebaseSource(),
+    "environmental_career": EnvironmentalCareerSource(),
+    "idealist":             IdealistSource(),
+    "handshake":            HandshakeSource(),
     "workable":         WorkableSource(),
     "remoteok":         RemoteOKSource(),
     "themuse":          TheMuseSource(),
@@ -193,6 +194,19 @@ async def ingest_climatebase(db: Session, user_id: Optional[str] = None) -> dict
     return {"ingested": ingested, "skipped": skipped, "source": "climatebase"}
 
 
+async def ingest_environmental_career(db: Session, user_id: Optional[str] = None) -> dict:
+    source = SOURCES["environmental_career"]
+    ingested, skipped = 0, 0
+    async for job in source.fetch():
+        if db.get(JobRow, job.id):
+            skipped += 1
+            continue
+        db.add(job_to_row(job, user_id=user_id))
+        ingested += 1
+    db.commit()
+    return {"ingested": ingested, "skipped": skipped, "source": "environmental_career"}
+
+
 async def ingest_idealist(db: Session, user_id: Optional[str] = None) -> dict:
     source = SOURCES["idealist"]
     ingested, skipped = 0, 0
@@ -326,7 +340,7 @@ async def bulk_ingest(db: Session, user_id: Optional[str] = None) -> dict:
         await _run(ingest_ashby(db, slug, user_id=user_id))
 
     await _run(ingest_80k(db, user_id=user_id))
-    await _run(ingest_climatebase(db, user_id=user_id))
+    await _run(ingest_environmental_career(db, user_id=user_id))
     await _run(ingest_idealist(db, user_id=user_id))
     await _run(ingest_handshake(db, user_id=user_id))
     await _run(ingest_workable(db, user_id=user_id))

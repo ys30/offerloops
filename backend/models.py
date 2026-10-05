@@ -22,6 +22,7 @@ class JobSource(str, Enum):
     ashby = "ashby"
     eighty_k_hours = "80k_hours"
     climatebase = "climatebase"
+    environmental_career = "environmental_career"
     idealist = "idealist"
     handshake = "handshake"
     workable = "workable"

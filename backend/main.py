@@ -1859,6 +1859,12 @@ async def trigger_climatebase(user_id: str = Depends(_require_user), db: Session
     return await ingest_climatebase(db, user_id=user_id)
 
 
+@app.post("/api/ingest/environmental_career", tags=["ingest"])
+async def trigger_environmental_career(user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
+    from .pipeline import ingest_environmental_career
+    return await ingest_environmental_career(db, user_id=user_id)
+
+
 @app.post("/api/ingest/handshake", tags=["ingest"])
 async def trigger_handshake(user_id: str = Depends(_require_user), db: Session = Depends(get_db)):
     """Requires HANDSHAKE_SESSION env var (session cookie from app.joinhandshake.com)."""

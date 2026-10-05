@@ -4,6 +4,7 @@ from .lever import LeverSource
 from .ashby import AshbySource
 from .eightykhours import EightyKHoursSource
 from .climatebase import ClimatebaseSource
+from .environmentalcareer import EnvironmentalCareerSource
 from .idealist import IdealistSource
 from .handshake import HandshakeSource
 from .workable import WorkableSource
@@ -15,7 +16,7 @@ from .remotive import RemotiveSource
 
 __all__ = [
     "USAJobsSource", "GreenhouseSource", "LeverSource",
-    "AshbySource", "EightyKHoursSource", "ClimatebaseSource", "IdealistSource",
-    "HandshakeSource", "WorkableSource", "RemoteOKSource", "TheMuseSource",
+    "AshbySource", "EightyKHoursSource", "ClimatebaseSource", "EnvironmentalCareerSource",
+    "IdealistSource", "HandshakeSource", "WorkableSource", "RemoteOKSource", "TheMuseSource",
     "SmartRecruitersSource", "JobicySource", "RemotiveSource",
 ]
